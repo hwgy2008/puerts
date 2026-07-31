@@ -60,7 +60,9 @@ namespace PUERTS_NAMESPACE
 
         v8::Local<v8::String> Source = Info[0]->ToString(Context).ToLocalChecked();
         v8::Local<v8::String> Name = Info[1]->ToString(Context).ToLocalChecked();
-#if defined(V8_94_OR_NEWER) && !defined(WITH_QUICKJS)
+#if PUERTS_V8_138_OR_NEWER
+        v8::ScriptOrigin Origin(Name);
+#elif defined(V8_94_OR_NEWER) && !defined(WITH_QUICKJS)
         v8::ScriptOrigin Origin(Isolate, Name);
 #else
         v8::ScriptOrigin Origin(Name);
@@ -286,7 +288,9 @@ namespace PUERTS_NAMESPACE
 
         v8::Local<v8::String> Url = FV8Utils::V8String(Isolate, Path == nullptr ? "" : Path);
         v8::Local<v8::String> Source = FV8Utils::V8String(Isolate, Code);
-#if defined(V8_94_OR_NEWER) && !defined(WITH_QUICKJS)
+#if PUERTS_V8_138_OR_NEWER
+        v8::ScriptOrigin Origin(Url);
+#elif defined(V8_94_OR_NEWER) && !defined(WITH_QUICKJS)
         v8::ScriptOrigin Origin(Isolate, Url);
 #else
         v8::ScriptOrigin Origin(Url);
@@ -438,7 +442,9 @@ namespace PUERTS_NAMESPACE
 
         FCallbackInfo* CallbackInfo = reinterpret_cast<FCallbackInfo*>((v8::Local<v8::External>::Cast(Info.Data()))->Value());
 
-        void* Ptr = CallbackInfo->IsStatic ? nullptr : FV8Utils::GetPoninter(Info.Holder());
+        void* Ptr = CallbackInfo->IsStatic ? nullptr
+                                           : FV8Utils::GetPoninter(
+                                                 puerts_v8_compatibility::GetFunctionCallbackHolder(Info));
 
 #ifdef MULT_BACKENDS
         auto JsEngine = FV8Utils::IsolateData<JSEngine>(Isolate);
@@ -770,7 +776,13 @@ namespace PUERTS_NAMESPACE
     bool JSEngine::IdleNotificationDeadline(double DeadlineInSeconds)
     {
 #ifndef WITH_QUICKJS
+#if PUERTS_V8_129_OR_NEWER
+        // 新版 V8 已移除 IdleNotificationDeadline；沿用 PuerTS 3.x 的保守兼容策略。
+        MainIsolate->MemoryPressureNotification(v8::MemoryPressureLevel::kModerate);
+        return true;
+#else
         return MainIsolate->IdleNotificationDeadline(DeadlineInSeconds);
+#endif
 #else
         return true;
 #endif

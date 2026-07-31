@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "puerts": {
+    "remote": "https://github.com/hwgy2008/puerts.git",
+    "baseRef": "refs/tags/Unity_v2.2.3",
+    "baseCommit": "070c6ae9a8e8e669d2e3882e0e0815309b2d156c",
+    "workingBranch": "Unity_v2.2.3-v8_13.8.258.54"
+  },
+  "backendV8": {
+    "remote": "https://github.com/hwgy2008/backend-v8.git",
+    "commit": "bd0af0482f820c7d6142e95ab8ff69648b0ae293",
+    "tag": "V8_13.8.258.54__260731",
+    "artifactRelativePath": ".build/artifacts/v8_13.8.258.54"
+  },
+  "v8": {
+    "remote": "https://chromium.googlesource.com/v8/v8.git",
+    "version": "13.8.258.54",
+    "commit": "c6ef3038bf3c5c4d7cbfd17424e078606225e985"
+  },
+  "depotTools": {
+    "commit": "571fb811a3a9e24afccbaf3191a2afaeeab17d78",
+    "gnVersion": "2237 (ebc8f16ca7b0)",
+    "ninjaVersion": "1.12.1"
+  },
+  "windowsX64": {
+    "verified": true,
+    "visualStudioVersion": "18.7.11919.86",
+    "visualStudioGenerator": "Visual Studio 18 2026",
+    "msvcToolset": "v145",
+    "msvcDirectoryVersion": "14.51.36231",
+    "compilerVersion": "19.51.36248",
+    "windowsSdkVersion": "10.0.26100.0",
+    "cmakeVersion": "4.3.1-msvc1",
+    "nodeVersion": "24.14.0",
+    "powershellVersion": "7.6.0",
+    "gitVersion": "2.53.0.windows.1",
+    "currentPolicy": {
+      "maglev": true,
+      "pointerCompression": false,
+      "sandbox": false,
+      "externalStartupData": false,
+      "i18n": false,
+      "webAssembly": false,
+      "systemInstrumentation": false,
+      "cppgcCagedHeap": false,
+      "staticLibrary": true,
+      "customLibcxx": false
+    },
+    "backendLibrary": {
+      "length": 167140130,
+      "sha256": "A1C024B298C149230F36CDAF496F6F1A3DEDA58A6837E2AC67B2E4276C7F9880",
+      "byteIdenticalToPreviousBuild": true
+    },
+    "debugDll": {
+      "length": 19957248,
+      "newSha256": "C7E5851128967DD154135CA344BAA6844AB6E242E0A37AC30239CFE8A7ACD3BB",
+      "previousSha256": "22E791CA18EA53DFC5B35E8ECFF5A985108BC68CD6FA64B955F1CEFC2001646B",
+      "exportsIdentical": true,
+      "dependenciesIdentical": true,
+      "smokePassed": true,
+      "differentByteCount": 6,
+      "differenceCause": "COFF build timestamp and its debug-directory copy",
+      "differenceRanges": [
+        "0x00000128-0x0000012A",
+        "0x01243474-0x01243476"
+      ],
+      "codeAndDataOtherwiseByteIdentical": true
+    }
+  },
+  "android": {
+    "v8_13_8BuildVerified": false,
+    "installedNdkRecordedForFollowUp": {
+      "path": "D:/Android/Sdk/ndk/28.2.13676358",
+      "revision": "28.2.13676358",
+      "releaseName": "r28c"
+    }
+  }
+}

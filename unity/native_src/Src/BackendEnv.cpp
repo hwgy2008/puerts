@@ -385,6 +385,9 @@ void FBackendEnv::UnInitialize()
     Platform->UnregisterIsolate(MainIsolate);
 #endif
     MainContext.Reset();
+#if !defined(WITH_NODEJS) && !defined(WITH_QUICKJS) && PUERTS_V8_138_OR_NEWER
+    v8::platform::NotifyIsolateShutdown(GPlatform.get(), MainIsolate);
+#endif
     MainIsolate->Dispose();
     MainIsolate = nullptr;
 #if WITH_NODEJS
@@ -774,7 +777,9 @@ v8::MaybeLocal<v8::Module> FBackendEnv::FetchModuleTree(v8::Isolate* isolate, v8
     {
         script_url = FV8Utils::V8String(isolate, pathForDebug.c_str());
     }
-#if defined(V8_94_OR_NEWER) && !defined(WITH_QUICKJS)
+#if PUERTS_V8_138_OR_NEWER
+    v8::ScriptOrigin origin(script_url, 0, 0, true, -1, v8::Local<v8::Value>(), false, false, true);
+#elif defined(V8_94_OR_NEWER) && !defined(WITH_QUICKJS)
     v8::ScriptOrigin origin(isolate, script_url, 0, 0, true, -1, v8::Local<v8::Value>(), false, false, true);
 #else
     v8::ScriptOrigin origin(script_url, v8::Integer::New(isolate, 0), v8::Integer::New(isolate, 0), v8::True(isolate),
@@ -1135,6 +1140,8 @@ std::string FBackendEnv::GetJSStackTrace()
 #ifdef THREAD_SAFE
     v8::Locker Locker(Isolate);
 #endif
+    // C# 可在 JavaScript 调用栈之外请求堆栈，必须先让当前线程进入对应 isolate。
+    v8::Isolate::Scope IsolateScope(Isolate);
     v8::HandleScope HandleScope(Isolate);
     v8::Local<v8::Context> Context = MainContext.Get(Isolate);
     v8::Context::Scope ContextScope(Context);

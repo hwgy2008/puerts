@@ -9,6 +9,13 @@ import * as process from "process";
 
 const glob = createRequire(fileURLToPath(import.meta.url))('glob');
 
+function getAndroidApi(backend) {
+    if (backend.includes('node')) return 'android-24';
+    if (backend.includes('10.6.194')) return 'android-23';
+    if (backend.includes('13.8.258.54')) return 'android-23';
+    return 'android-21';
+}
+
 function getInstalledVSVersions() {
    try {
        const vswherePath = join(
@@ -45,7 +52,8 @@ function selectVisualStudioGenerator() {
       const versionMap = {
          15: 'Visual Studio 15 2017',
          16: 'Visual Studio 16 2019',
-         17: 'Visual Studio 17 2022'
+         17: 'Visual Studio 17 2022',
+         18: 'Visual Studio 18 2026'
       };
       
       const bestVersion = sortedVS[0].majorVersion;
@@ -59,7 +67,7 @@ const platformCompileConfig = {
             outputPluginPath: 'Android/libs/armeabi-v7a/',
             hook: function (CMAKE_BUILD_PATH, options, cmakeAddedLibraryName, cmakeDArgs) {
                 const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME || '~/android-ndk-r21b';
-                const API = options.backend.indexOf('node') !== -1 ? 'android-24' : (options.backend.indexOf('10.6.194') !== -1 ? 'android-23' : 'android-21');
+                const API = getAndroidApi(options.backend);
                 const ABI = 'armeabi-v7a';
                 const TOOLCHAIN_NAME = 'arm-linux-androideabi-4.9';
 
@@ -86,7 +94,7 @@ const platformCompileConfig = {
             outputPluginPath: 'Android/libs/arm64-v8a/',
             hook: function (CMAKE_BUILD_PATH, options, cmakeAddedLibraryName, cmakeDArgs) {
                 const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME || '~/android-ndk-r21b';
-                const API = options.backend.indexOf('node') !== -1 ? 'android-24' : (options.backend.indexOf('10.6.194') !== -1 ? 'android-23' : 'android-21');
+                const API = getAndroidApi(options.backend);
                 const ABI = 'arm64-v8a';
                 const TOOLCHAIN_NAME = 'arm-linux-androideabi-clang';
 
@@ -113,7 +121,7 @@ const platformCompileConfig = {
             outputPluginPath: 'Android/libs/x86_64/',
             hook: function (CMAKE_BUILD_PATH, options, cmakeAddedLibraryName, cmakeDArgs) {
                 const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME || '~/android-ndk-r21b';
-                const API = options.backend.indexOf('node') !== -1 ? 'android-24' : (options.backend.indexOf('10.6.194') !== -1 ? 'android-23' : 'android-21');
+                const API = getAndroidApi(options.backend);
                 const ABI = 'x86_64';
                 const TOOLCHAIN_NAME = 'x86_64-4.9';
 
@@ -349,6 +357,9 @@ async function runPuertsMake(cwd, options) {
     }
     if (options.backend == "v8_9.4") {
         options.backend = "v8_9.4.146.24";
+    }
+    if (options.backend == "v8_13.8") {
+        options.backend = "v8_13.8.258.54";
     }
     if (!existsSync(`${cwd}/../native_src/.backends/${options.backend}`)) {
         await downloadBackend(cwd, options.backend);

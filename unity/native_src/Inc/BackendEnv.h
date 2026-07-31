@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include "Common.h"
+#include "V8Compatibility.h"
 #include "Log.h"
 #include "V8InspectorImpl.h"
 

@@ -1,0 +1,45 @@
+{
+  "SchemaVersion": 1,
+  "GeneratedAt": "2026-07-31T13:01:05.1076810+08:00",
+  "V8Version": "13.8.258.54",
+  "BackendLibrary": {
+    "Path": "D:\\UGit\\puerts-Unity_v2.2.3\\unity\\native_src\\.backends\\v8_13.8.258.54\\Lib\\Win64\\wee8.lib",
+    "Length": 167140130,
+    "Sha256": "A1C024B298C149230F36CDAF496F6F1A3DEDA58A6837E2AC67B2E4276C7F9880"
+  },
+  "Toolchain": {
+    "VisualStudioVersion": "18.7.11919.86",
+    "VisualStudioPath": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise",
+    "Generator": "Visual Studio 18 2026",
+    "CMakeVersion": "4.3.1-msvc1",
+    "NodeVersion": "24.14.0"
+  },
+  "Configurations": [
+    {
+      "Name": "Debug",
+      "CMakeConfiguration": "Release",
+      "Inspector": true,
+      "WebSocket": true,
+      "Symbols": false,
+      "Runtime": "MultiThreaded",
+      "ArtifactDirectory": "D:\\UGit\\puerts-Unity_v2.2.3\\unity\\build-artifacts\\v8_13.8.258.54\\Windows\\x86_64\\Debug",
+      "Files": [
+        {
+          "Name": "puerts.dll",
+          "Length": 19957248,
+          "Sha256": "C7E5851128967DD154135CA344BAA6844AB6E242E0A37AC30239CFE8A7ACD3BB"
+        },
+        {
+          "Name": "puerts.exp",
+          "Length": 163697,
+          "Sha256": "157C77A9A941C3DFD615224371EC3486DD6DC526A03FF26247BB5B4CBAE7784E"
+        },
+        {
+          "Name": "puerts.lib",
+          "Length": 265666,
+          "Sha256": "758AA8B451C6FAA917A5177DC7486F3CDCABD47EFBA75F857C5688FE718AEE04"
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Tencent is pleased to support the open source community by making Puerts available.
  * Copyright (C) 2020 Tencent.  All rights reserved.
  * Puerts is licensed under the BSD 3-Clause License, except for the third-party components listed in the file 'LICENSE' which may
@@ -20,6 +20,7 @@
 
 #include "DataTransfer.h"
 #include "ObjectMapper.h"
+#include "V8Compatibility.h"
 
 
 struct pesapi_env_ref__
@@ -495,13 +496,15 @@ PESAPI_EXTERN pesapi_env pesapi_get_env(pesapi_callback_info pinfo)
 void* pesapi_get_native_holder_ptr(pesapi_callback_info pinfo)
 {
     auto info = reinterpret_cast<const v8::FunctionCallbackInfo<v8::Value>*>(pinfo);
-    return puerts::DataTransfer::GetPointerFast<void>((*info).Holder());
+    return puerts::DataTransfer::GetPointerFast<void>(
+        puerts_v8_compatibility::GetFunctionCallbackHolder(*info));
 }
 
 const void* pesapi_get_native_holder_typeid(pesapi_callback_info pinfo)
 {
     auto info = reinterpret_cast<const v8::FunctionCallbackInfo<v8::Value>*>(pinfo);
-    return puerts::DataTransfer::GetPointerFast<void>((*info).Holder(), 1);
+    return puerts::DataTransfer::GetPointerFast<void>(
+        puerts_v8_compatibility::GetFunctionCallbackHolder(*info), 1);
 }
 
 void* pesapi_get_userdata(pesapi_callback_info pinfo)
@@ -828,11 +831,13 @@ pesapi_value pesapi_eval(pesapi_env env, const uint8_t* code, size_t code_size, 
     v8::Local<v8::String> url =
         v8::String::NewFromUtf8(isolate, path == nullptr ? "" : path, v8::NewStringType::kNormal).ToLocalChecked();
     std::vector<char> buff;
-    buff.reserve(code_size + 1);
+    buff.resize(code_size + 1);
     memcpy(buff.data(), code, code_size);
     buff.data()[code_size] = '\0';
     v8::Local<v8::String> source = v8::String::NewFromUtf8(isolate, buff.data(), v8::NewStringType::kNormal).ToLocalChecked();
-#if V8_MAJOR_VERSION > 8
+#if PUERTS_V8_138_OR_NEWER
+    v8::ScriptOrigin origin(url);
+#elif V8_MAJOR_VERSION > 8
     v8::ScriptOrigin origin(isolate, url);
 #else
     v8::ScriptOrigin origin(url);

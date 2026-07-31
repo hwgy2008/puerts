@@ -16,12 +16,6 @@ option ( USING_QJS "using quickjs" ON )
 option ( USING_QJS_SUFFIX "add _qjs to namespace of simule v8 api " ON )
 option ( WITH_SYMBOLS "generate debug symbols" OFF )
 
-if("${JS_ENGINE}" MATCHES "^v8_10.6.194")
-    set(CMAKE_CXX_STANDARD 17)
-else ()
-    set(CMAKE_CXX_STANDARD 14)
-endif ()
-
 if ( IOS )
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fembed-bitcode")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fembed-bitcode")
@@ -38,6 +32,22 @@ MARK_AS_ADVANCED(PUERTS_PROJECT_DIR)
 if ( NOT DEFINED JS_ENGINE )
     set(JS_ENGINE v8)
 endif()
+
+if(MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+endif()
+
+if("${JS_ENGINE}" MATCHES "^v8_13\\.8")
+    set(CMAKE_CXX_STANDARD 20)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    if(MSVC)
+        add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/Zc:__cplusplus>)
+    endif()
+elseif("${JS_ENGINE}" MATCHES "^v8_10.6.194")
+    set(CMAKE_CXX_STANDARD 17)
+else ()
+    set(CMAKE_CXX_STANDARD 14)
+endif ()
 
 set(USING_MULT_BACKEND OFF)
 if("${JS_ENGINE}" MATCHES "^mult")
@@ -70,6 +80,7 @@ include_directories(
 
 set ( PUERTS_INC
     Inc/Common.h
+    Inc/V8Compatibility.h
     Inc/Log.h
     Inc/BackendEnv.h
     Inc/JSEngine.h

@@ -10,6 +10,7 @@
 
 #include "V8InspectorImpl.h"    // for PRAGMA_DISABLE_UNDEFINED_IDENTIFIER_WARNINGS
 #include "V8Utils.h"
+#include "V8Compatibility.h"
 
 #ifndef THIRD_PARTY_INCLUDES_START
 #define THIRD_PARTY_INCLUDES_START
@@ -442,7 +443,8 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
     WSTemplate->PrototypeTemplate()->Set(v8::String::NewFromUtf8(Isolate, "send").ToLocalChecked(),
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info) {
-                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(Info.Holder()->GetAlignedPointerFromInternalField(0))
+                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
+                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
                     ->Send(Info);
             }));
 
@@ -450,21 +452,24 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info)
             {
-                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(Info.Holder()->GetAlignedPointerFromInternalField(0))
+                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
+                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
                     ->SetHandles(Info);
             }));
 
     WSTemplate->PrototypeTemplate()->Set(v8::String::NewFromUtf8(Isolate, "close").ToLocalChecked(),
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info) {
-                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(Info.Holder()->GetAlignedPointerFromInternalField(0))
+                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
+                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
                     ->Close(Info);
             }));
 
     WSTemplate->PrototypeTemplate()->Set(v8::String::NewFromUtf8(Isolate, "statue").ToLocalChecked(),
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info) {
-                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(Info.Holder()->GetAlignedPointerFromInternalField(0))
+                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
+                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
                     ->Statue(Info);
             }));
 
@@ -473,7 +478,8 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
             [](const v8::FunctionCallbackInfo<v8::Value>& Info)
             {
                 v8::TryCatch TryCatch(Info.GetIsolate());
-                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(Info.Holder()->GetAlignedPointerFromInternalField(0))
+                static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
+                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
                     ->PollOne();
             }));
 

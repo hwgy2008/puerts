@@ -1,0 +1,28 @@
+{
+  "verifiedAt": "2026-07-31T13:01:05+08:00",
+  "backend": {
+    "fullCleanBuildPassed": true,
+    "newLength": 167140130,
+    "previousLength": 167140130,
+    "newSha256": "A1C024B298C149230F36CDAF496F6F1A3DEDA58A6837E2AC67B2E4276C7F9880",
+    "previousSha256": "A1C024B298C149230F36CDAF496F6F1A3DEDA58A6837E2AC67B2E4276C7F9880",
+    "byteIdentical": true
+  },
+  "puertsDebugDll": {
+    "buildPassed": true,
+    "smokePassed": true,
+    "newLength": 19957248,
+    "previousLength": 19957248,
+    "newSha256": "C7E5851128967DD154135CA344BAA6844AB6E242E0A37AC30239CFE8A7ACD3BB",
+    "previousSha256": "22E791CA18EA53DFC5B35E8ECFF5A985108BC68CD6FA64B955F1CEFC2001646B",
+    "exportsIdentical": true,
+    "dependenciesIdentical": true,
+    "differentByteCount": 6,
+    "differentRanges": [
+      "0x00000128-0x0000012A",
+      "0x01243474-0x01243476"
+    ],
+    "dumpbinExplanation": "两段差异均为 COFF time date stamp 0x6A6B77A2 到 0x6A6C2C0E；第二段是调试目录中的副本。",
+    "runtimeCodeDifferenceFound": false
+  }
+}

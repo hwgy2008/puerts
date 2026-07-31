@@ -1,0 +1,39 @@
+**********************
+PowerShell transcript start
+Start time: 20260731001111
+Username: LILITHGAMES\haoyunpeng
+RunAs User: LILITHGAMES\haoyunpeng
+Configuration Name:
+Machine: HG1HYP (Microsoft Windows NT 10.0.19045.0)
+Host Application: C:\Program Files\PowerShell\7\pwsh.dll -NoProfile -File D:\Code\puerts-Unity_v2.2.3\unity\cli\build-v8-13.8-windows.ps1 -Configuration Debug -Incremental -ArtifactRoot D:\Code\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64\MaglevOn
+Process ID: 13308
+PSVersion: 7.6.0
+PSEdition: Core
+GitCommitId: 7.6.0
+OS: Microsoft Windows 10.0.19045
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+开始构建 Windows x64 Debug
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.19045.
+-- Configuring done (0.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: D:/Code/puerts-Unity_v2.2.3/unity/native_src/build_win_x64_v8_13.8.258.54_debug
+适用于 .NET Framework MSBuild 版本 18.7.8+1ac568fee
+
+  1>Checking Build System
+  Building Custom Rule D:/Code/puerts-Unity_v2.2.3/unity/native_src/CMakeLists.txt
+    正在创建库 D:/Code/puerts-Unity_v2.2.3/unity/native_src/build_win_x64_v8_13.8.258.54_debug/Release/puerts.lib 和对象 D:/Code/puerts-Unity_v2.2.3/unity/native_src/build_win_x64_v8_13.8.258.54_debug/Release/puerts.exp
+  puerts.vcxproj -> D:\Code\puerts-Unity_v2.2.3\unity\native_src\build_win_x64_v8_13.8.258.54_debug\Release\puerts.dll
+  Building Custom Rule D:/Code/puerts-Unity_v2.2.3/unity/native_src/CMakeLists.txt
+Smoke 通过: D:\Code\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64\MaglevOn\Debug\puerts.dll
+Windows 双配置构建与 smoke 验证完成。
+产物目录：D:\Code\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64\MaglevOn
+清单：D:\Code\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64\MaglevOn\manifest.json
+**********************
+PowerShell transcript end
+End time: 20260731001117
+**********************

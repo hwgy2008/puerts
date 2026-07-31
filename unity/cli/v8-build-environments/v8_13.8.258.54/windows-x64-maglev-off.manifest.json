@@ -1,0 +1,71 @@
+{
+  "SchemaVersion": 1,
+  "GeneratedAt": "2026-07-28T17:20:33.2156767+08:00",
+  "V8Version": "13.8.258.54",
+  "BackendLibrary": {
+    "Path": "D:\\Code\\puerts-Unity_v2.2.3\\unity\\native_src\\.backends\\v8_13.8.258.54\\Lib\\Win64\\wee8.lib",
+    "Length": 161982678,
+    "Sha256": "9F318B191C72E8A053E25274F6E3F9ED7A4DC31AABF499BA3A8585FA754E640E"
+  },
+  "Toolchain": {
+    "VisualStudioVersion": "18.7.11919.86",
+    "VisualStudioPath": "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise",
+    "Generator": "Visual Studio 18 2026",
+    "CMakeVersion": "4.3.1-msvc1",
+    "NodeVersion": "24.14.0"
+  },
+  "Configurations": [
+    {
+      "Name": "Release",
+      "CMakeConfiguration": "Release",
+      "Inspector": false,
+      "WebSocket": false,
+      "Symbols": false,
+      "Runtime": "MultiThreaded",
+      "ArtifactDirectory": "D:\\Code\\puerts-Unity_v2.2.3\\unity\\build-artifacts\\v8_13.8.258.54\\Windows\\x86_64\\Release",
+      "Files": [
+        {
+          "Name": "puerts.dll",
+          "Length": 19280896,
+          "Sha256": "4F4B12307560999D3731FCD7CBDA33B7A487CC712E4F2D6737C50A0AB7C268DF"
+        },
+        {
+          "Name": "puerts.exp",
+          "Length": 163685,
+          "Sha256": "8584A9EA724A7A92F90FC167A7882AB33669F09229E294D6B452851A7AF261F8"
+        },
+        {
+          "Name": "puerts.lib",
+          "Length": 265666,
+          "Sha256": "758AA8B451C6FAA917A5177DC7486F3CDCABD47EFBA75F857C5688FE718AEE04"
+        }
+      ]
+    },
+    {
+      "Name": "Debug",
+      "CMakeConfiguration": "Release",
+      "Inspector": true,
+      "WebSocket": true,
+      "Symbols": false,
+      "Runtime": "MultiThreaded",
+      "ArtifactDirectory": "D:\\Code\\puerts-Unity_v2.2.3\\unity\\build-artifacts\\v8_13.8.258.54\\Windows\\x86_64\\Debug",
+      "Files": [
+        {
+          "Name": "puerts.dll",
+          "Length": 19363328,
+          "Sha256": "5DD68CD1FBC6F59E5DE138187ED4AA566C9F285C2948B6FD85E8A9401C2C928A"
+        },
+        {
+          "Name": "puerts.exp",
+          "Length": 163697,
+          "Sha256": "179E0236D49852A9B776D25457A33057F671B0282743C3A282D7EF4F361FBE3D"
+        },
+        {
+          "Name": "puerts.lib",
+          "Length": 265666,
+          "Sha256": "758AA8B451C6FAA917A5177DC7486F3CDCABD47EFBA75F857C5688FE718AEE04"
+        }
+      ]
+    }
+  ]
+}

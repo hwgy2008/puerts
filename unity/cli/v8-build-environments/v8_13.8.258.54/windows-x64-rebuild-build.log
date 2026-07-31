@@ -1,0 +1,65 @@
+**********************
+PowerShell transcript start
+Start time: 20260731130026
+Username: LILITHGAMES\haoyunpeng
+RunAs User: LILITHGAMES\haoyunpeng
+Configuration Name:
+Machine: HG1HYP (Microsoft Windows NT 10.0.19045.0)
+Host Application: C:\Program Files\PowerShell\7\pwsh.dll -NoProfile -ExecutionPolicy Bypass -File .\unity\cli\build-v8-13.8-windows.ps1 -Configuration Debug
+Process ID: 47176
+PSVersion: 7.6.0
+PSEdition: Core
+GitCommitId: 7.6.0
+OS: Microsoft Windows 10.0.19045
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+开始构建 Windows x64 Debug
+-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.19045.
+-- The C compiler identification is MSVC 19.51.36248.0
+-- The CXX compiler identification is MSVC 19.51.36248.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (5.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: D:/UGit/puerts-Unity_v2.2.3/unity/native_src/build_win_x64_v8_13.8.258.54_debug
+适用于 .NET Framework MSBuild 版本 18.7.8+1ac568fee
+
+  1>Checking Build System
+  Building Custom Rule D:/UGit/puerts-Unity_v2.2.3/unity/native_src/CMakeLists.txt
+  Puerts.cpp
+  Log.cpp
+  BackendEnv.cpp
+  JSEngine.cpp
+  JSFunction.cpp
+  V8InspectorImpl.cpp
+  CppObjectMapper.cpp
+  DataTransfer.cpp
+  PesapiAddonLoad.cpp
+  PesapiV8Impl.cpp
+  JSClassRegister.cpp
+  WebSocketImpl.cpp
+  正在生成代码...
+  pesapi_wrap.c
+    正在创建库 D:/UGit/puerts-Unity_v2.2.3/unity/native_src/build_win_x64_v8_13.8.258.54_debug/Release/puerts.lib 和对象 D:/UGit/puerts-Unity_v2.2.3/unity/native_src/build_win_x64_v8_13.8.258.54_debug/Release/puerts.exp
+  puerts.vcxproj -> D:\UGit\puerts-Unity_v2.2.3\unity\native_src\build_win_x64_v8_13.8.258.54_debug\Release\puerts.dll
+  Building Custom Rule D:/UGit/puerts-Unity_v2.2.3/unity/native_src/CMakeLists.txt
+Smoke 通过: D:\UGit\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64\Debug\puerts.dll
+Windows 双配置构建与 smoke 验证完成。
+产物目录：D:\UGit\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64
+清单：D:\UGit\puerts-Unity_v2.2.3\unity\build-artifacts\v8_13.8.258.54\Windows\x86_64\manifest.json
+**********************
+PowerShell transcript end
+End time: 20260731130105
+**********************
