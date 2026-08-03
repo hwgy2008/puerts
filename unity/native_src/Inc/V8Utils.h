@@ -10,6 +10,7 @@
 #include <string>
 #include <sstream>
 #include "Common.h"
+#include "V8Compatibility.h"
 
 namespace PUERTS_NAMESPACE
 {
@@ -33,9 +34,11 @@ public:
     }
 
     template<typename T>
-    V8_INLINE static T* ExternalData(const v8::FunctionCallbackInfo<v8::Value>& Info)
+    V8_INLINE static T* ExternalData(const v8::FunctionCallbackInfo<v8::Value>& Info,
+        puerts_v8_compatibility::ExternalPointerTag Tag)
     {
-        return reinterpret_cast<T*>((v8::Local<v8::External>::Cast(Info.Data()))->Value());
+        return reinterpret_cast<T*>(puerts_v8_compatibility::GetExternalValue(
+            v8::Local<v8::External>::Cast(Info.Data()), Tag));
     }
 
     V8_INLINE static v8::Local<v8::String> V8String(v8::Isolate* Isolate, const char* String)
@@ -87,7 +90,8 @@ public:
         }
     }
 
-    V8_INLINE static void * GetPoninter(v8::Local<v8::Context>& Context, v8::Local<v8::Value> Value, int Index = 0)
+    V8_INLINE static void * GetPoninter(v8::Local<v8::Context>& Context, v8::Local<v8::Value> Value,
+        int Index, puerts_v8_compatibility::EmbedderDataTag Tag)
     {
         if (Value.IsEmpty() || !Value->IsObject() || Value->IsUndefined() || Value->IsNull())
         {
@@ -95,10 +99,11 @@ public:
         }
         auto Object = Value->ToObject(Context).ToLocalChecked();
         return Object->InternalFieldCount() > Index ?
-            Object->GetAlignedPointerFromInternalField(Index) : nullptr;
+            puerts_v8_compatibility::GetAlignedPointerFromInternalField(Object, Index, Tag) : nullptr;
     }
 
-    V8_INLINE static void * GetPoninter(v8::Local<v8::Context>& Context, v8::Value *Value, int Index = 0)
+    V8_INLINE static void * GetPoninter(v8::Local<v8::Context>& Context, v8::Value *Value,
+        int Index, puerts_v8_compatibility::EmbedderDataTag Tag)
     {
         if (!Value->IsObject() || Value->IsUndefined() || Value->IsNull())
         {
@@ -106,17 +111,18 @@ public:
         }
         auto Object = Value->ToObject(Context).ToLocalChecked();
         return Object->InternalFieldCount() > Index ?
-            Object->GetAlignedPointerFromInternalField(Index) : nullptr;
+            puerts_v8_compatibility::GetAlignedPointerFromInternalField(Object, Index, Tag) : nullptr;
     }
 
-    V8_INLINE static void * GetPoninter(v8::Local<v8::Object> Object, int Index = 0)
+    V8_INLINE static void * GetPoninter(v8::Local<v8::Object> Object, int Index,
+        puerts_v8_compatibility::EmbedderDataTag Tag)
     {
         if (Object.IsEmpty() || Object->IsUndefined() || Object->IsNull())
         {
             return nullptr;
         }
         return Object->InternalFieldCount() > Index ?
-            Object->GetAlignedPointerFromInternalField(Index) : nullptr;
+            puerts_v8_compatibility::GetAlignedPointerFromInternalField(Object, Index, Tag) : nullptr;
     }
 
     V8_INLINE static puerts::JsValueType GetType(v8::Local<v8::Context> Context, const v8::Value *Value)
@@ -158,7 +164,9 @@ public:
         else if (Value->IsObject())
         {
             auto Object = Value->ToObject(Context).ToLocalChecked();
-            if (Object->InternalFieldCount() == 3 && (intptr_t)Object->GetAlignedPointerFromInternalField(2) == OBJECT_MAGIC)
+            if (Object->InternalFieldCount() == 3 &&
+                (intptr_t)puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                    Object, 2, puerts_v8_compatibility::EmbedderDataTag::ObjectMagic) == OBJECT_MAGIC)
             {
                 return puerts::NativeObject;
             }

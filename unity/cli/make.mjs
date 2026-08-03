@@ -13,7 +13,23 @@ function getAndroidApi(backend) {
     if (backend.includes('node')) return 'android-24';
     if (backend.includes('10.6.194')) return 'android-23';
     if (backend.includes('13.8.258.54')) return 'android-23';
+    if (backend.includes('14.9.207.39')) return 'android-23';
     return 'android-21';
+}
+
+function configureAndroid(CMAKE_BUILD_PATH, options, cmakeDArgs, ABI) {
+    const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME;
+    if (!NDK) throw new Error('必须显式设置 ANDROID_NDK 或 ANDROID_NDK_HOME');
+    if (options.backend === 'v8_14.9.207.39') {
+        const sourceProperties = readFileSync(join(NDK, 'source.properties'), 'utf8');
+        if (!/^Pkg\.Revision\s*=\s*28\.2\.13676358\s*$/m.test(sourceProperties)) {
+            throw new Error(`V8 14.9 Android 仅允许 NDK 28.2.13676358：${NDK}`);
+        }
+    }
+    const API = getAndroidApi(options.backend);
+    const cmake_gen = `cmake ${cmakeDArgs} -G Ninja -S . -B"${CMAKE_BUILD_PATH}" -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DJS_ENGINE=${options.backend} -DCMAKE_BUILD_TYPE=${options.config} -DANDROID_ABI=${ABI} -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" -DANDROID_PLATFORM=${API} -DANDROID_STL=c++_static`;
+    assert.equal(0, exec(cmake_gen).code);
+    assert.equal(0, exec(`cmake --build "${CMAKE_BUILD_PATH}" --config ${options.config}`).code);
 }
 
 function getInstalledVSVersions() {
@@ -66,18 +82,8 @@ const platformCompileConfig = {
         'armv7': {
             outputPluginPath: 'Android/libs/armeabi-v7a/',
             hook: function (CMAKE_BUILD_PATH, options, cmakeAddedLibraryName, cmakeDArgs) {
-                const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME || '~/android-ndk-r21b';
-                const API = getAndroidApi(options.backend);
                 const ABI = 'armeabi-v7a';
-                const TOOLCHAIN_NAME = 'arm-linux-androideabi-4.9';
-
-                let cmake_gen = `cmake ${cmakeDArgs} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DJS_ENGINE=${options.backend} -DCMAKE_BUILD_TYPE=${options.config} -DANDROID_ABI=${ABI} -H. -B"${CMAKE_BUILD_PATH}" -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" -DANDROID_NATIVE_API_LEVEL=${API} -DANDROID_TOOLCHAIN=clang -DANDROID_TOOLCHAIN_NAME=${TOOLCHAIN_NAME}`;
-                if(process.platform == "win32"){
-                    cmake_gen += ' -G"Unix Makefiles"';
-                    cmake_gen += ` -DCMAKE_MAKE_PROGRAM="${NDK}/prebuilt/windows-x86_64/bin/make.exe"`;
-                }
-                assert.equal(0, exec(cmake_gen).code);
-                assert.equal(0, exec(`cmake --build ${CMAKE_BUILD_PATH} --config ${options.config}`).code);
+                configureAndroid(CMAKE_BUILD_PATH, options, cmakeDArgs, ABI);
 
                 if (existsSync(`${CMAKE_BUILD_PATH}/lib${cmakeAddedLibraryName}.a`))
                     return [`${CMAKE_BUILD_PATH}/lib${cmakeAddedLibraryName}.a`];
@@ -93,18 +99,8 @@ const platformCompileConfig = {
         'arm64': {
             outputPluginPath: 'Android/libs/arm64-v8a/',
             hook: function (CMAKE_BUILD_PATH, options, cmakeAddedLibraryName, cmakeDArgs) {
-                const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME || '~/android-ndk-r21b';
-                const API = getAndroidApi(options.backend);
                 const ABI = 'arm64-v8a';
-                const TOOLCHAIN_NAME = 'arm-linux-androideabi-clang';
-
-                let cmake_gen = `cmake ${cmakeDArgs} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DJS_ENGINE=${options.backend} -DCMAKE_BUILD_TYPE=${options.config} -DANDROID_ABI=${ABI} -H. -B"${CMAKE_BUILD_PATH}" -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" -DANDROID_NATIVE_API_LEVEL=${API} -DANDROID_TOOLCHAIN=clang -DANDROID_TOOLCHAIN_NAME=${TOOLCHAIN_NAME}`;
-                if(process.platform == "win32"){
-                    cmake_gen += ' -G"Unix Makefiles"';
-                    cmake_gen += ` -DCMAKE_MAKE_PROGRAM="${NDK}/prebuilt/windows-x86_64/bin/make.exe"`;
-                }
-                assert.equal(0, exec(cmake_gen).code);
-                assert.equal(0, exec(`cmake --build ${CMAKE_BUILD_PATH} --config ${options.config}`).code);
+                configureAndroid(CMAKE_BUILD_PATH, options, cmakeDArgs, ABI);
 
                 if (existsSync(`${CMAKE_BUILD_PATH}/lib${cmakeAddedLibraryName}.a`))
                     return [`${CMAKE_BUILD_PATH}/lib${cmakeAddedLibraryName}.a`];
@@ -120,18 +116,8 @@ const platformCompileConfig = {
         'x64': {
             outputPluginPath: 'Android/libs/x86_64/',
             hook: function (CMAKE_BUILD_PATH, options, cmakeAddedLibraryName, cmakeDArgs) {
-                const NDK = process.env.ANDROID_NDK || process.env.ANDROID_NDK_HOME || '~/android-ndk-r21b';
-                const API = getAndroidApi(options.backend);
                 const ABI = 'x86_64';
-                const TOOLCHAIN_NAME = 'x86_64-4.9';
-
-                let cmake_gen = `cmake ${cmakeDArgs} -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DJS_ENGINE=${options.backend} -DCMAKE_BUILD_TYPE=${options.config} -DANDROID_ABI=${ABI} -H. -B"${CMAKE_BUILD_PATH}" -DCMAKE_TOOLCHAIN_FILE="${NDK}/build/cmake/android.toolchain.cmake" -DANDROID_NATIVE_API_LEVEL=${API} -DANDROID_TOOLCHAIN=clang -DANDROID_TOOLCHAIN_NAME=${TOOLCHAIN_NAME}`;
-                if(process.platform == "win32"){
-                    cmake_gen += ' -G"Unix Makefiles"';
-                    cmake_gen += ` -DCMAKE_MAKE_PROGRAM="${NDK}/prebuilt/windows-x86_64/bin/make.exe"`;
-                }
-                assert.equal(0, exec(cmake_gen).code);
-                assert.equal(0, exec(`cmake --build ${CMAKE_BUILD_PATH} --config ${options.config}`).code);
+                configureAndroid(CMAKE_BUILD_PATH, options, cmakeDArgs, ABI);
 
                 if (existsSync(`${CMAKE_BUILD_PATH}/lib${cmakeAddedLibraryName}.a`))
                     return [`${CMAKE_BUILD_PATH}/lib${cmakeAddedLibraryName}.a`];
@@ -360,6 +346,9 @@ async function runPuertsMake(cwd, options) {
     }
     if (options.backend == "v8_13.8") {
         options.backend = "v8_13.8.258.54";
+    }
+    if (options.backend == "v8_14.9") {
+        options.backend = "v8_14.9.207.39";
     }
     if (!existsSync(`${cwd}/../native_src/.backends/${options.backend}`)) {
         await downloadBackend(cwd, options.backend);

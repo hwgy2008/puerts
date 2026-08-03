@@ -7,6 +7,7 @@
 
 #include "IPuertsPlugin.h"
 #include "JSEngine.h"
+#include <limits>
 
 namespace PUERTS_NAMESPACE
 {
@@ -313,10 +314,19 @@ void* V8Plugin::GetResultInfo()
 const char* V8Plugin::GetJSStackTrace(int* Length)
 {
     std::string str = jsEngine.GetJSStackTrace();
+    if (str.length() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        *Length = 0;
+        jsEngine.StrBuffer.resize(1);
+        jsEngine.StrBuffer[0] = '\0';
+        return jsEngine.StrBuffer.data();
+    }
     *Length = static_cast<int>(str.length());
-    if (jsEngine.StrBuffer.size() < *Length + 1)
-        jsEngine.StrBuffer.reserve(*Length + 1);
-    memcpy(jsEngine.StrBuffer.data(), str.c_str(), *Length);
+    if (jsEngine.StrBuffer.size() < static_cast<size_t>(*Length + 1))
+        jsEngine.StrBuffer.resize(*Length + 1);
+    if (*Length > 0)
+        memcpy(jsEngine.StrBuffer.data(), str.data(), *Length);
+    jsEngine.StrBuffer[*Length] = '\0';
     return jsEngine.StrBuffer.data();
 }
 
@@ -382,7 +392,7 @@ double V8Plugin::GetNumberFromValue(void* pValue, int IsOut)
         if (maybeNumber.IsNothing())
             return 0;
 #else
-        v8::TryCatch trycatch(Context->GetIsolate());
+        v8::TryCatch trycatch(puerts_v8_compatibility::GetIsolate(Context));
         auto maybeNumber = Value->NumberValue(Context);
         if (maybeNumber.IsNothing() || trycatch.HasCaught())
         {
@@ -460,9 +470,11 @@ const char *V8Plugin::GetStringFromValue(void* pValue, int *Length, int IsOut)
         auto Context = Isolate->GetCurrentContext();
         v8::Local<v8::String> Str;
         if (!Value->ToString(Context).ToLocal(&Str)) return nullptr;
-        *Length = Str->Utf8Length(Isolate);
-        if (jsEngine.StrBuffer.size() < *Length + 1) jsEngine.StrBuffer.reserve(*Length + 1);
-        Str->WriteUtf8(Isolate, jsEngine.StrBuffer.data());
+        *Length = static_cast<int>(puerts_v8_compatibility::Utf8Length(Str, Isolate));
+        if (jsEngine.StrBuffer.size() < static_cast<size_t>(*Length + 1))
+            jsEngine.StrBuffer.resize(*Length + 1);
+        puerts_v8_compatibility::WriteUtf8CString(
+            Str, Isolate, jsEngine.StrBuffer.data(), static_cast<size_t>(*Length + 1));
         
         return jsEngine.StrBuffer.data();
     }
@@ -573,16 +585,36 @@ const char* V8Plugin::GetArrayBufferFromValue(void* pValue, int *Length, int IsO
         if (Value->IsArrayBufferView())
         {
             v8::ArrayBufferView * BuffView = v8::ArrayBufferView::Cast(Value);
-            *Length = static_cast<int>(BuffView->ByteLength());
-            auto ABS = BuffView->Buffer()->GetBackingStore();
-            return static_cast<char*>(ABS->Data()) + BuffView->ByteOffset();
+            const size_t ViewLength = BuffView->ByteLength();
+            if (ViewLength == 0 || ViewLength > static_cast<size_t>(std::numeric_limits<int>::max()))
+            {
+                *Length = 0;
+                return nullptr;
+            }
+            size_t BufferLength = 0;
+            void* BufferData = puerts_v8_compatibility::GetArrayBufferData(BuffView->Buffer(), BufferLength);
+            if (BufferData == nullptr || BuffView->ByteOffset() > BufferLength ||
+                ViewLength > BufferLength - BuffView->ByteOffset())
+            {
+                *Length = 0;
+                return nullptr;
+            }
+            *Length = static_cast<int>(ViewLength);
+            return static_cast<char*>(BufferData) + BuffView->ByteOffset();
         }
         else if (Value->IsArrayBuffer())
         {
             auto Ab = v8::ArrayBuffer::Cast(Value);
-            auto ABS = Ab->GetBackingStore();
-            *Length = static_cast<int>(ABS->ByteLength());
-            return static_cast<char*>(ABS->Data());
+            size_t BufferLength = 0;
+            void* BufferData = puerts_v8_compatibility::GetArrayBufferData(Ab, BufferLength);
+            if (BufferLength == 0 || BufferData == nullptr ||
+                BufferLength > static_cast<size_t>(std::numeric_limits<int>::max()))
+            {
+                *Length = 0;
+                return nullptr;
+            }
+            *Length = static_cast<int>(BufferLength);
+            return static_cast<char*>(BufferData);
         }
         else
         {
@@ -618,7 +650,8 @@ void* V8Plugin::GetObjectFromValue(void* pValue, int IsOut)
     else
     {
         auto Context = Isolate->GetCurrentContext();
-        return FV8Utils::GetPoninter(Context, Value);
+        return FV8Utils::GetPoninter(
+            Context, Value, 0, puerts_v8_compatibility::EmbedderDataTag::NativeObject);
     }
 }
 
@@ -650,7 +683,8 @@ int V8Plugin::GetTypeIdFromValue(void* pValue, int IsOut)
         else
         {
             auto Context = Isolate->GetCurrentContext();
-            auto LifeCycleInfo = static_cast<FLifeCycleInfo *>(FV8Utils::GetPoninter(Context, Value, 1));
+            auto LifeCycleInfo = static_cast<FLifeCycleInfo *>(FV8Utils::GetPoninter(
+                Context, Value, 1, puerts_v8_compatibility::EmbedderDataTag::LifeCycleInfo));
             return LifeCycleInfo ? LifeCycleInfo->ClassID : -1;
         }
     }
@@ -1044,9 +1078,11 @@ const char *V8Plugin::GetStringFromResult(void* pResultInfo, int *Length)
         *Length = 0;
         return nullptr;
     }
-    *Length = Str->Utf8Length(Isolate);
-    if (jsEngine.StrBuffer.size() < *Length + 1) jsEngine.StrBuffer.reserve(*Length + 1);
-    Str->WriteUtf8(Isolate, jsEngine.StrBuffer.data());
+    *Length = static_cast<int>(puerts_v8_compatibility::Utf8Length(Str, Isolate));
+    if (jsEngine.StrBuffer.size() < static_cast<size_t>(*Length + 1))
+        jsEngine.StrBuffer.resize(*Length + 1);
+    puerts_v8_compatibility::WriteUtf8CString(
+        Str, Isolate, jsEngine.StrBuffer.data(), static_cast<size_t>(*Length + 1));
 
     return jsEngine.StrBuffer.data();
 }
@@ -1115,16 +1151,36 @@ const char *V8Plugin::GetArrayBufferFromResult(void* pResultInfo, int *Length)
     if (Value->IsArrayBufferView())
     {
         v8::Local<v8::ArrayBufferView>  BuffView = Value.As<v8::ArrayBufferView>();
-        *Length = static_cast<int>(BuffView->ByteLength());
-        auto ABS = BuffView->Buffer()->GetBackingStore();
-        return static_cast<char*>(ABS->Data()) + BuffView->ByteOffset();
+        const size_t ViewLength = BuffView->ByteLength();
+        if (ViewLength == 0 || ViewLength > static_cast<size_t>(std::numeric_limits<int>::max()))
+        {
+            *Length = 0;
+            return nullptr;
+        }
+        size_t BufferLength = 0;
+        void* BufferData = puerts_v8_compatibility::GetArrayBufferData(BuffView->Buffer(), BufferLength);
+        if (BufferData == nullptr || BuffView->ByteOffset() > BufferLength ||
+            ViewLength > BufferLength - BuffView->ByteOffset())
+        {
+            *Length = 0;
+            return nullptr;
+        }
+        *Length = static_cast<int>(ViewLength);
+        return static_cast<char*>(BufferData) + BuffView->ByteOffset();
     }
     else if (Value->IsArrayBuffer())
     {
         auto Ab = v8::Local <v8::ArrayBuffer>::Cast(Value);
-        auto ABS = Ab->GetBackingStore();
-        *Length = static_cast<int>(ABS->ByteLength());
-        return static_cast<char*>(ABS->Data());
+        size_t BufferLength = 0;
+        void* BufferData = puerts_v8_compatibility::GetArrayBufferData(Ab, BufferLength);
+        if (BufferLength == 0 || BufferData == nullptr ||
+            BufferLength > static_cast<size_t>(std::numeric_limits<int>::max()))
+        {
+            *Length = 0;
+            return nullptr;
+        }
+        *Length = static_cast<int>(BufferLength);
+        return static_cast<char*>(BufferData);
     }
     else
     {
@@ -1145,7 +1201,8 @@ void *V8Plugin::GetObjectFromResult(void* pResultInfo)
     v8::Context::Scope ContextScope(Context);
     auto Result = ResultInfo->Result.Get(Isolate);
 
-    return FV8Utils::GetPoninter(Context, Result);
+    return FV8Utils::GetPoninter(
+        Context, Result, 0, puerts_v8_compatibility::EmbedderDataTag::NativeObject);
 }
 
 int V8Plugin::GetTypeIdFromResult(void* pResultInfo)
@@ -1161,7 +1218,8 @@ int V8Plugin::GetTypeIdFromResult(void* pResultInfo)
     v8::Context::Scope ContextScope(Context);
     auto Result = ResultInfo->Result.Get(Isolate);
 
-    auto LifeCycleInfo = static_cast<PUERTS_NAMESPACE::FLifeCycleInfo *>(FV8Utils::GetPoninter(Context, Result, 1));
+    auto LifeCycleInfo = static_cast<PUERTS_NAMESPACE::FLifeCycleInfo *>(FV8Utils::GetPoninter(
+        Context, Result, 1, puerts_v8_compatibility::EmbedderDataTag::LifeCycleInfo));
     return LifeCycleInfo ? LifeCycleInfo->ClassID : -1;
 }
 

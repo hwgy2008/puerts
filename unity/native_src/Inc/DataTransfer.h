@@ -23,6 +23,7 @@ PRAGMA_DISABLE_UNDEFINED_IDENTIFIER_WARNINGS
 #include "v8.h"
 #pragma warning(pop)
 PRAGMA_ENABLE_UNDEFINED_IDENTIFIER_WARNINGS
+#include "V8Compatibility.h"
 
 #if !defined(MAPPER_ISOLATE_DATA_POS)
 #define MAPPER_ISOLATE_DATA_POS 2
@@ -260,7 +261,10 @@ public:
         if (V8_LIKELY(Object->InternalFieldCount() > P2))
         {
             return static_cast<T*>(MakeAddressWithHighPartOfTwo(
-                Object->GetAlignedPointerFromInternalField(P1), Object->GetAlignedPointerFromInternalField(P2)));
+                puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                    Object, P1, puerts_v8_compatibility::EmbedderDataTag::SplitPointerHigh),
+                puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                    Object, P2, puerts_v8_compatibility::EmbedderDataTag::SplitPointerLow)));
         }
         return nullptr;
     }
@@ -271,7 +275,10 @@ public:
         if (V8_LIKELY(Object->InternalFieldCount() > 1))
         {
             return static_cast<T*>(MakeAddressWithHighPartOfTwo(
-                Object->GetAlignedPointerFromInternalField(0), Object->GetAlignedPointerFromInternalField(1)));
+                puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                    Object, 0, puerts_v8_compatibility::EmbedderDataTag::SplitPointerHigh),
+                puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                    Object, 1, puerts_v8_compatibility::EmbedderDataTag::SplitPointerLow)));
         }
         return nullptr;
     }
@@ -305,8 +312,10 @@ public:
         UPTRINT High;
         UPTRINT Low;
         SplitAddressToHighPartOfTwo(Ptr, High, Low);
-        Object->SetAlignedPointerInInternalField(Index * 2, reinterpret_cast<void*>(High));
-        Object->SetAlignedPointerInInternalField(Index * 2 + 1, reinterpret_cast<void*>(Low));
+        puerts_v8_compatibility::SetAlignedPointerInInternalField(Object, Index * 2,
+            reinterpret_cast<void*>(High), puerts_v8_compatibility::EmbedderDataTag::SplitPointerHigh);
+        puerts_v8_compatibility::SetAlignedPointerInInternalField(Object, Index * 2 + 1,
+            reinterpret_cast<void*>(Low), puerts_v8_compatibility::EmbedderDataTag::SplitPointerLow);
     }
     
     FORCEINLINE static void SetPointer(v8::Object* Object, const void* Ptr, int Index)
@@ -314,8 +323,10 @@ public:
         UPTRINT High;
         UPTRINT Low;
         SplitAddressToHighPartOfTwo(Ptr, High, Low);
-        Object->SetAlignedPointerInInternalField(Index * 2, reinterpret_cast<void*>(High));
-        Object->SetAlignedPointerInInternalField(Index * 2 + 1, reinterpret_cast<void*>(Low));
+        puerts_v8_compatibility::SetAlignedPointerInInternalField(Object, Index * 2,
+            reinterpret_cast<void*>(High), puerts_v8_compatibility::EmbedderDataTag::SplitPointerHigh);
+        puerts_v8_compatibility::SetAlignedPointerInInternalField(Object, Index * 2 + 1,
+            reinterpret_cast<void*>(Low), puerts_v8_compatibility::EmbedderDataTag::SplitPointerLow);
     }
 
     template <typename T>
@@ -386,11 +397,17 @@ public:
     FORCEINLINE static v8::Local<v8::ArrayBuffer> NewArrayBuffer(v8::Local<v8::Context> Context, void* Data, size_t DataLength)
     {
 #if USING_IN_UNREAL_ENGINE
-        return v8::ArrayBuffer::New(Context->GetIsolate(), Data, DataLength);
+        return v8::ArrayBuffer::New(
+            puerts_v8_compatibility::GetIsolate(Context), Data, DataLength);
 #else
-        v8::Local<v8::ArrayBuffer> Ab = v8::ArrayBuffer::New(Context->GetIsolate(), DataLength);
-        void* Buff = Ab->GetBackingStore()->Data();
-        ::memcpy(Buff, Data, DataLength);
+        v8::Local<v8::ArrayBuffer> Ab =
+            v8::ArrayBuffer::New(puerts_v8_compatibility::GetIsolate(Context), DataLength);
+        if (DataLength > 0)
+        {
+            if (Data == nullptr) std::abort();
+            void* Buff = puerts_v8_compatibility::RequireArrayBufferData(Ab, DataLength);
+            ::memcpy(Buff, Data, DataLength);
+        }
         return Ab;
 #endif
     }
@@ -404,7 +421,7 @@ public:
     FORCEINLINE static void* GetArrayBufferData(v8::Local<v8::ArrayBuffer> InArrayBuffer, size_t& DataLength)
     {
 #if defined(HAS_ARRAYBUFFER_NEW_WITHOUT_STL)
-        return v8::ArrayBuffer_Get_Data(InArrayBuffer, DataLength);
+        return puerts_v8_compatibility::GetArrayBufferData(InArrayBuffer, DataLength);
 #else
 #if USING_IN_UNREAL_ENGINE
         DataLength = InArrayBuffer->GetContents().ByteLength();

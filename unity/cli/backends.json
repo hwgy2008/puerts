@@ -466,6 +466,38 @@
             "copy-libraries": {}
         }
     },
+    "v8_14.9.207.39": {
+        "url": "",
+        "config": {
+            "definition": [
+                "V8_94_OR_NEWER"
+            ],
+            "include": [
+                "/Inc"
+            ],
+            "link-libraries": {
+                "android": {
+                    "armv7": [
+                        "/Lib/Android/armeabi-v7a/libwee8.a"
+                    ],
+                    "arm64": [
+                        "/Lib/Android/arm64-v8a/libwee8.a"
+                    ],
+                    "x64": [
+                        "/Lib/Android/x64/libwee8.a"
+                    ]
+                },
+                "win": {
+                    "x64": [
+                        "/Lib/Win64/wee8.lib",
+                        "/Lib/Win64/libc++.lib",
+                        "/Lib/Win64/clang_rt.builtins-x86_64.lib"
+                    ]
+                }
+            },
+            "copy-libraries": {}
+        }
+    },
     "mult": {
         "url": "https://github.com/puerts/backend-mult/releases/download/MULT_241030/mult_backends.tgz",
         "config": {

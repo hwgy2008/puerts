@@ -37,7 +37,13 @@ if(MSVC)
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
 endif()
 
-if("${JS_ENGINE}" MATCHES "^v8_13\\.8")
+string(REGEX MATCH "^v8_([0-9]+)\\.([0-9]+)" PUERTS_V8_VERSION_MATCH "${JS_ENGINE}")
+set(PUERTS_V8_MAJOR "${CMAKE_MATCH_1}")
+set(PUERTS_V8_MINOR "${CMAKE_MATCH_2}")
+
+if(PUERTS_V8_VERSION_MATCH AND
+   (PUERTS_V8_MAJOR GREATER 13 OR
+    (PUERTS_V8_MAJOR EQUAL 13 AND PUERTS_V8_MINOR GREATER_EQUAL 8)))
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     if(MSVC)
@@ -68,6 +74,65 @@ if(NOT ("${JS_ENGINE}" STREQUAL "quickjs"))
     string (REPLACE ";" "$<SEMICOLON>${BACKEND_ROOT}" BACKEND_LIB_NAMES "${BACKEND_ROOT}${BACKEND_LIB_NAMES}")
 endif()
 string (REPLACE ";" "$<SEMICOLON>" BACKEND_DEFINITIONS "${BACKEND_DEFINITIONS}")
+
+if ("${JS_ENGINE}" STREQUAL "v8_14.9.207.39")
+    list(APPEND BACKEND_DEFINITIONS
+        V8_ARRAY_BUFFER_INTERNAL_FIELD_COUNT=0
+        V8_ARRAY_BUFFER_VIEW_INTERNAL_FIELD_COUNT=0
+        V8_PROMISE_INTERNAL_FIELD_COUNT=0
+        V8_USE_DEFAULT_HASHER_SECRET=true
+        V8_DEPRECATION_WARNINGS
+        V8_IMMINENT_DEPRECATION_WARNINGS
+        V8_HAVE_TARGET_OS
+    )
+    if (WIN32)
+        list(APPEND BACKEND_DEFINITIONS V8_TARGET_OS_WIN)
+        if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+            list(APPEND BACKEND_DEFINITIONS
+                V8_COMPRESS_POINTERS
+                V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+                V8_31BIT_SMIS_ON_64BIT_ARCH
+            )
+        endif()
+    elseif (ANDROID)
+        list(APPEND BACKEND_DEFINITIONS V8_TARGET_OS_ANDROID)
+        if (NOT CMAKE_ANDROID_NDK_VERSION VERSION_EQUAL "28.2")
+            message(FATAL_ERROR "V8 14.9 Android 仅允许 NDK 28.2.x，CMake 识别为 ${CMAKE_ANDROID_NDK_VERSION}")
+        endif()
+        if (NOT DEFINED ANDROID_NDK_REVISION OR NOT ANDROID_NDK_REVISION STREQUAL "28.2.13676358")
+            message(FATAL_ERROR "V8 14.9 Android 仅允许 NDK 28.2.13676358，toolchain 识别为 ${ANDROID_NDK_REVISION}")
+        endif()
+        if (NOT CMAKE_SYSTEM_VERSION EQUAL 23)
+            message(FATAL_ERROR "V8 14.9 Android 固定 minSdk/API 23，实际为 ${CMAKE_SYSTEM_VERSION}")
+        endif()
+        if (NOT ANDROID_STL STREQUAL "c++_static")
+            message(FATAL_ERROR "V8 14.9 Android 固定使用 c++_static，实际为 ${ANDROID_STL}")
+        endif()
+        if (ANDROID_ABI STREQUAL "arm64-v8a" OR ANDROID_ABI STREQUAL "x86_64")
+            if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+                message(FATAL_ERROR "V8 14.9 ${ANDROID_ABI} 必须按 64 位目标编译")
+            endif()
+            list(APPEND BACKEND_DEFINITIONS
+                V8_COMPRESS_POINTERS
+                V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+                V8_31BIT_SMIS_ON_64BIT_ARCH
+            )
+        elseif (ANDROID_ABI STREQUAL "armeabi-v7a")
+            if (NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+                message(FATAL_ERROR "V8 14.9 armeabi-v7a 必须按 32 位目标编译")
+            endif()
+            # V8 32 位目标不支持指针压缩；此 ABI 仍启用后端中编译好的 Maglev。
+        else()
+            message(FATAL_ERROR "V8 14.9 Android 仅支持 armeabi-v7a、arm64-v8a、x86_64，实际为 ${ANDROID_ABI}")
+        endif()
+    elseif (CMAKE_SIZEOF_VOID_P EQUAL 8)
+        list(APPEND BACKEND_DEFINITIONS
+            V8_COMPRESS_POINTERS
+            V8_COMPRESS_POINTERS_IN_SHARED_CAGE
+            V8_31BIT_SMIS_ON_64BIT_ARCH
+        )
+    endif()
+endif()
 
 include_directories(
     ${PROJECT_SOURCE_DIR}
@@ -678,6 +743,10 @@ endif()
 target_link_libraries(puerts
     ${BACKEND_LIB_NAMES}
 )
+if (WIN32 AND "${JS_ENGINE}" STREQUAL "v8_14.9.207.39")
+    # clang-cl + Chromium libc++ 仍使用 MSVC 静态 C 运行库；显式链接避免链接器默认库推导随环境漂移。
+    target_link_libraries(puerts libcpmt.lib)
+endif()
 list(APPEND PUERTS_COMPILE_DEFINITIONS ${BACKEND_DEFINITIONS})
 
 target_compile_definitions (puerts PUBLIC ${PUERTS_COMPILE_DEFINITIONS})

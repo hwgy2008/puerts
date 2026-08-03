@@ -20,7 +20,7 @@ template <typename T>
 void PromiseRejectCallback(v8::PromiseRejectMessage Message)
 {
     auto Promise = Message.GetPromise();
-    auto Isolate = Promise->GetIsolate();
+    auto Isolate = v8::Isolate::GetCurrent();
     auto Event = Message.GetEvent();
 
     auto JsEngine = T::Get(Isolate);

@@ -52,7 +52,9 @@ namespace PUERTS_NAMESPACE
 
         auto Function = GFunction.Get(Isolate);
 
-        Function->Set(Context, FV8Utils::V8String(Isolate, FUNCTION_INDEX_KEY), v8::Undefined(Isolate));
+        static_cast<void>(Function
+                ->Set(Context, FV8Utils::V8String(Isolate, FUNCTION_INDEX_KEY), v8::Undefined(Isolate))
+                .IsJust());
 
         GFunction.Reset();
         ResultInfo.Result.Reset();

@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <string>
+#include <type_traits>
 #ifdef WITH_V8_FAST_CALL
 #include "V8FastCall.hpp"
 #endif

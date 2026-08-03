@@ -5,7 +5,7 @@
  * be subject to their corresponding license terms. This file is subject to the terms and conditions defined in file 'LICENSE',
  * which is part of this source code package.
  */
- 
+
 #include "pesapi.h"
 #include "TypeInfo.hpp"
 #include "PString.h"
@@ -26,10 +26,10 @@
 struct pesapi_env_ref__
 {
     explicit pesapi_env_ref__(v8::Local<v8::Context> context)
-        : context_persistent(context->GetIsolate(), context)
-        , isolate(context->GetIsolate())
+        : context_persistent(puerts_v8_compatibility::GetIsolate(context), context)
+        , isolate(puerts_v8_compatibility::GetIsolate(context))
         , ref_count(1)
-        , env_life_cycle_tracker(puerts::DataTransfer::GetJsEnvLifeCycleTracker(context->GetIsolate()))
+        , env_life_cycle_tracker(puerts::DataTransfer::GetJsEnvLifeCycleTracker(puerts_v8_compatibility::GetIsolate(context)))
     {
     }
 
@@ -42,7 +42,7 @@ struct pesapi_env_ref__
 struct pesapi_value_ref__ : pesapi_env_ref__
 {
     explicit pesapi_value_ref__(v8::Local<v8::Context> context, v8::Local<v8::Value> value, uint32_t field_count)
-        : pesapi_env_ref__(context), value_persistent(context->GetIsolate(), value), internal_field_count(field_count)
+        : pesapi_env_ref__(context), value_persistent(puerts_v8_compatibility::GetIsolate(context), value), internal_field_count(field_count)
     {
     }
 
@@ -97,63 +97,63 @@ inline v8::Local<v8::Context> V8LocalContextFromPesapiEnv(pesapi_env v)
 pesapi_value pesapi_create_null(pesapi_env env)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Null(context->GetIsolate()));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Null(puerts_v8_compatibility::GetIsolate(context)));
 }
 
 pesapi_value pesapi_create_undefined(pesapi_env env)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Undefined(context->GetIsolate()));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Undefined(puerts_v8_compatibility::GetIsolate(context)));
 }
 
 pesapi_value pesapi_create_boolean(pesapi_env env, bool value)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Boolean::New(context->GetIsolate(), value));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Boolean::New(puerts_v8_compatibility::GetIsolate(context), value));
 }
 
 pesapi_value pesapi_create_int32(pesapi_env env, int32_t value)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Integer::New(context->GetIsolate(), value));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Integer::New(puerts_v8_compatibility::GetIsolate(context), value));
 }
 
 pesapi_value pesapi_create_uint32(pesapi_env env, uint32_t value)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Integer::NewFromUnsigned(context->GetIsolate(), value));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Integer::NewFromUnsigned(puerts_v8_compatibility::GetIsolate(context), value));
 }
 
 pesapi_value pesapi_create_int64(pesapi_env env, int64_t value)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::BigInt::New(context->GetIsolate(), value));
+    return v8impl::PesapiValueFromV8LocalValue(v8::BigInt::New(puerts_v8_compatibility::GetIsolate(context), value));
 }
 
 pesapi_value pesapi_create_uint64(pesapi_env env, uint64_t value)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::BigInt::NewFromUnsigned(context->GetIsolate(), value));
+    return v8impl::PesapiValueFromV8LocalValue(v8::BigInt::NewFromUnsigned(puerts_v8_compatibility::GetIsolate(context), value));
 }
 
 pesapi_value pesapi_create_double(pesapi_env env, double value)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Number::New(context->GetIsolate(), value));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Number::New(puerts_v8_compatibility::GetIsolate(context), value));
 }
 
 pesapi_value pesapi_create_string_utf8(pesapi_env env, const char* str, size_t length)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     return v8impl::PesapiValueFromV8LocalValue(
-        v8::String::NewFromUtf8(context->GetIsolate(), str, v8::NewStringType::kNormal, static_cast<int>(length)).ToLocalChecked());
+        v8::String::NewFromUtf8(puerts_v8_compatibility::GetIsolate(context), str, v8::NewStringType::kNormal, static_cast<int>(length)).ToLocalChecked());
 }
 
 pesapi_value pesapi_create_string_utf16(pesapi_env env, const uint16_t* str, size_t length)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     return v8impl::PesapiValueFromV8LocalValue(
-        v8::String::NewFromTwoByte(context->GetIsolate(), str, v8::NewStringType::kNormal, static_cast<int>(length)).ToLocalChecked());
+        v8::String::NewFromTwoByte(puerts_v8_compatibility::GetIsolate(context), str, v8::NewStringType::kNormal, static_cast<int>(length)).ToLocalChecked());
 }
 
 pesapi_value pesapi_create_binary(pesapi_env env, void* bin, size_t length)
@@ -165,19 +165,19 @@ pesapi_value pesapi_create_binary(pesapi_env env, void* bin, size_t length)
 pesapi_value pesapi_create_array(pesapi_env env)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Array::New(context->GetIsolate()));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Array::New(puerts_v8_compatibility::GetIsolate(context)));
 }
 
 pesapi_value pesapi_create_object(pesapi_env env)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return v8impl::PesapiValueFromV8LocalValue(v8::Object::New(context->GetIsolate()));
+    return v8impl::PesapiValueFromV8LocalValue(v8::Object::New(puerts_v8_compatibility::GetIsolate(context)));
 }
 
 pesapi_value pesapi_create_function(pesapi_env env, pesapi_callback native_impl, void* data, pesapi_function_finalize finalize)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    auto func = puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(context->GetIsolate())->CreateFunction(context, native_impl, data, finalize);
+    auto func = puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(puerts_v8_compatibility::GetIsolate(context))->CreateFunction(context, native_impl, data, finalize);
     if (func.IsEmpty())
         return nullptr;
     return v8impl::PesapiValueFromV8LocalValue(func.ToLocalChecked());
@@ -186,7 +186,7 @@ pesapi_value pesapi_create_function(pesapi_env env, pesapi_callback native_impl,
 pesapi_value pesapi_create_class(pesapi_env env, const void* type_id)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    auto cls = puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(context->GetIsolate())->LoadTypeById(context, type_id);
+    auto cls = puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(puerts_v8_compatibility::GetIsolate(context))->LoadTypeById(context, type_id);
     if (cls.IsEmpty())
         return nullptr;
     return v8impl::PesapiValueFromV8LocalValue(cls.ToLocalChecked());
@@ -196,15 +196,15 @@ bool pesapi_get_value_bool(pesapi_env env, pesapi_value pvalue)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     auto value = v8impl::V8LocalValueFromPesapiValue(pvalue);
-    return value->BooleanValue(context->GetIsolate());
+    return value->BooleanValue(puerts_v8_compatibility::GetIsolate(context));
 }
 
 int32_t pesapi_get_value_int32(pesapi_env env, pesapi_value pvalue)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     auto value = v8impl::V8LocalValueFromPesapiValue(pvalue);
-    
-    v8::TryCatch trycatch(context->GetIsolate());
+
+    v8::TryCatch trycatch(puerts_v8_compatibility::GetIsolate(context));
     auto maybe_result = value->Int32Value(context);
     if (maybe_result.IsNothing() || trycatch.HasCaught()) {
         if (trycatch.HasCaught()) {
@@ -219,8 +219,8 @@ uint32_t pesapi_get_value_uint32(pesapi_env env, pesapi_value pvalue)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     auto value = v8impl::V8LocalValueFromPesapiValue(pvalue);
-    
-    v8::TryCatch trycatch(context->GetIsolate());
+
+    v8::TryCatch trycatch(puerts_v8_compatibility::GetIsolate(context));
     auto maybe_result = value->Uint32Value(context);
     if (maybe_result.IsNothing() || trycatch.HasCaught()) {
         if (trycatch.HasCaught()) {
@@ -249,8 +249,8 @@ double pesapi_get_value_double(pesapi_env env, pesapi_value pvalue)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     auto value = v8impl::V8LocalValueFromPesapiValue(pvalue);
-    
-    v8::TryCatch trycatch(context->GetIsolate());
+
+    v8::TryCatch trycatch(puerts_v8_compatibility::GetIsolate(context));
     auto maybe_result = value->NumberValue(context);
     if (maybe_result.IsNothing() || trycatch.HasCaught()) {
         if (trycatch.HasCaught()) {
@@ -269,12 +269,14 @@ const char* pesapi_get_value_string_utf8(pesapi_env env, pesapi_value pvalue, ch
     if (buf == nullptr)
     {
         auto str = value->ToString(context).ToLocalChecked();
-        *bufsize = str->Utf8Length(context->GetIsolate());
+        *bufsize = static_cast<uint32_t>(puerts_v8_compatibility::Utf8Length(
+            str, puerts_v8_compatibility::GetIsolate(context)));
     }
     else
     {
         auto str = value->ToString(context).ToLocalChecked();
-        str->WriteUtf8(context->GetIsolate(), buf, *bufsize);
+        puerts_v8_compatibility::WriteUtf8Bytes(
+            str, puerts_v8_compatibility::GetIsolate(context), buf, *bufsize);
     }
     return buf;
 }
@@ -292,7 +294,8 @@ const uint16_t* pesapi_get_value_string_utf16(pesapi_env env, pesapi_value pvalu
     else
     {
         auto str = value->ToString(context).ToLocalChecked();
-        str->Write(context->GetIsolate(), buf, 0, *bufsize);
+        puerts_v8_compatibility::WriteTwoByte(
+            str, puerts_v8_compatibility::GetIsolate(context), buf, *bufsize);
     }
     return buf;
 }
@@ -410,7 +413,7 @@ pesapi_value pesapi_native_object_to_value(pesapi_env env, const void* type_id, 
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     return v8impl::PesapiValueFromV8LocalValue(
-        ::puerts::DataTransfer::FindOrAddCData(context->GetIsolate(), context, type_id, object_ptr, !call_finalize));
+        ::puerts::DataTransfer::FindOrAddCData(puerts_v8_compatibility::GetIsolate(context), context, type_id, object_ptr, !call_finalize));
 }
 
 void* pesapi_get_native_object_ptr(pesapi_env env, pesapi_value pvalue)
@@ -435,7 +438,7 @@ bool pesapi_is_instance_of(pesapi_env env, const void* type_id, pesapi_value pva
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     auto value = v8impl::V8LocalValueFromPesapiValue(pvalue);
-    return ::puerts::DataTransfer::IsInstanceOf(context->GetIsolate(), static_cast<const char*>(type_id), value.As<v8::Object>());
+    return ::puerts::DataTransfer::IsInstanceOf(puerts_v8_compatibility::GetIsolate(context), static_cast<const char*>(type_id), value.As<v8::Object>());
 }
 
 pesapi_value pesapi_boxing(pesapi_env env, pesapi_value pvalue)
@@ -443,7 +446,7 @@ pesapi_value pesapi_boxing(pesapi_env env, pesapi_value pvalue)
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
     auto value = v8impl::V8LocalValueFromPesapiValue(pvalue);
 
-    auto result = v8::Object::New(context->GetIsolate());
+    auto result = v8::Object::New(puerts_v8_compatibility::GetIsolate(context));
     auto _unused = result->Set(context, 0, value);
     return v8impl::PesapiValueFromV8LocalValue(result);
 }
@@ -510,7 +513,9 @@ const void* pesapi_get_native_holder_typeid(pesapi_callback_info pinfo)
 void* pesapi_get_userdata(pesapi_callback_info pinfo)
 {
     auto info = reinterpret_cast<const v8::FunctionCallbackInfo<v8::Value>*>(pinfo);
-    return *(static_cast<void**>(v8::Local<v8::External>::Cast((*info).Data())->Value()));
+    return *(static_cast<void**>(puerts_v8_compatibility::GetExternalValue(
+        v8::Local<v8::External>::Cast((*info).Data()),
+        puerts_v8_compatibility::ExternalPointerTag::PesapiCallbackData)));
 }
 
 void pesapi_add_return(pesapi_callback_info pinfo, pesapi_value value)
@@ -701,9 +706,9 @@ bool pesapi_set_owner(pesapi_env env, pesapi_value pvalue, pesapi_value powner)
     {
         auto jsObj = owner.template As<v8::Object>();
 #if V8_MAJOR_VERSION < 8
-        jsObj->Set(context, v8::String::NewFromUtf8(context->GetIsolate(), "_p_i_only_one_child").ToLocalChecked(), value).Check();
+        jsObj->Set(context, v8::String::NewFromUtf8(puerts_v8_compatibility::GetIsolate(context), "_p_i_only_one_child").ToLocalChecked(), value).Check();
 #else
-        jsObj->Set(context, v8::String::NewFromUtf8Literal(context->GetIsolate(), "_p_i_only_one_child"), value).Check();
+        jsObj->Set(context, v8::String::NewFromUtf8Literal(puerts_v8_compatibility::GetIsolate(context), "_p_i_only_one_child"), value).Check();
 #endif
         return true;
     }
@@ -728,7 +733,7 @@ pesapi_value pesapi_get_property(pesapi_env env, pesapi_value pobject, const cha
     if (object->IsObject())
     {
         auto MaybeValue = object.As<v8::Object>()->Get(
-            context, v8::String::NewFromUtf8(context->GetIsolate(), key, v8::NewStringType::kNormal).ToLocalChecked());
+            context, v8::String::NewFromUtf8(puerts_v8_compatibility::GetIsolate(context), key, v8::NewStringType::kNormal).ToLocalChecked());
         v8::Local<v8::Value> Val;
         if (MaybeValue.ToLocal(&Val))
         {
@@ -747,7 +752,7 @@ void pesapi_set_property(pesapi_env env, pesapi_value pobject, const char* key, 
     if (object->IsObject())
     {
         auto _un_used = object.As<v8::Object>()->Set(
-            context, v8::String::NewFromUtf8(context->GetIsolate(), key, v8::NewStringType::kNormal).ToLocalChecked(), value);
+            context, v8::String::NewFromUtf8(puerts_v8_compatibility::GetIsolate(context), key, v8::NewStringType::kNormal).ToLocalChecked(), value);
     }
 }
 
@@ -760,7 +765,7 @@ bool pesapi_get_private(pesapi_env env, pesapi_value pobject, void** out_ptr)
         *out_ptr = nullptr;
         return false;
     }
-    *out_ptr = puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(context->GetIsolate())
+    *out_ptr = puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(puerts_v8_compatibility::GetIsolate(context))
                    ->GetPrivateData(context, object.As<v8::Object>());
     return true;
 }
@@ -773,7 +778,7 @@ bool pesapi_set_private(pesapi_env env, pesapi_value pobject, void* ptr)
     {
         return false;
     }
-    puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(context->GetIsolate())
+    puerts::DataTransfer::IsolateData<puerts::ICppObjectMapper>(puerts_v8_compatibility::GetIsolate(context))
         ->SetPrivateData(context, object.As<v8::Object>(), ptr);
     return true;
 }
@@ -809,7 +814,7 @@ void pesapi_set_property_uint32(pesapi_env env, pesapi_value pobject, uint32_t k
 pesapi_value pesapi_call_function(pesapi_env env, pesapi_value pfunc, pesapi_value this_object, int argc, const pesapi_value argv[])
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    v8::Local<v8::Value> recv = v8::Undefined(context->GetIsolate());
+    v8::Local<v8::Value> recv = v8::Undefined(puerts_v8_compatibility::GetIsolate(context));
     if (this_object)
     {
         recv = v8impl::V8LocalValueFromPesapiValue(this_object);
@@ -827,7 +832,7 @@ pesapi_value pesapi_call_function(pesapi_env env, pesapi_value pfunc, pesapi_val
 pesapi_value pesapi_eval(pesapi_env env, const uint8_t* code, size_t code_size, const char* path)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    auto isolate = context->GetIsolate();
+    auto isolate = puerts_v8_compatibility::GetIsolate(context);
     v8::Local<v8::String> url =
         v8::String::NewFromUtf8(isolate, path == nullptr ? "" : path, v8::NewStringType::kNormal).ToLocalChecked();
     std::vector<char> buff;
@@ -866,13 +871,13 @@ pesapi_value pesapi_global(pesapi_env env)
 const void* pesapi_get_env_private(pesapi_env env)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    return puerts::DataTransfer::GetIsolatePrivateData(context->GetIsolate());
+    return puerts::DataTransfer::GetIsolatePrivateData(puerts_v8_compatibility::GetIsolate(context));
 }
 
 void pesapi_set_env_private(pesapi_env env, const void* ptr)
 {
     auto context = v8impl::V8LocalContextFromPesapiEnv(env);
-    puerts::DataTransfer::SetIsolatePrivateData(context->GetIsolate(), const_cast<void*>(ptr));
+    puerts::DataTransfer::SetIsolatePrivateData(puerts_v8_compatibility::GetIsolate(context), const_cast<void*>(ptr));
 }
 
 pesapi_ffi g_pesapi_ffi {

@@ -36,8 +36,12 @@ namespace PUERTS_NAMESPACE
     v8::Local<v8::ArrayBuffer> NewArrayBuffer(v8::Isolate* Isolate, void *Ptr, size_t Size)
     {
         v8::Local<v8::ArrayBuffer> Ab = v8::ArrayBuffer::New(Isolate, Size);
-        void* Buff = Ab->GetBackingStore()->Data();
-        ::memcpy(Buff, Ptr, Size);
+        if (Size > 0)
+        {
+            if (Ptr == nullptr) std::abort();
+            void* Buff = puerts_v8_compatibility::RequireArrayBufferData(Ab, Size);
+            ::memcpy(Buff, Ptr, Size);
+        }
         return Ab;
     }
 
@@ -185,10 +189,12 @@ namespace PUERTS_NAMESPACE
                 if (Value->IsObject())
                 {
                     auto Object = Value->ToObject(Context).ToLocalChecked();
-                    auto LifeCycleInfo = static_cast<FLifeCycleInfo *>(FV8Utils::GetPoninter(Object, 1));
+                    auto LifeCycleInfo = static_cast<FLifeCycleInfo *>(FV8Utils::GetPoninter(
+                        Object, 1, puerts_v8_compatibility::EmbedderDataTag::LifeCycleInfo));
                     if (LifeCycleInfo && LifeCycleInfo->Size > 0)
                     {
-                        auto Ptr = FV8Utils::GetPoninter(Object);
+                        auto Ptr = FV8Utils::GetPoninter(
+                            Object, 0, puerts_v8_compatibility::EmbedderDataTag::NativeObject);
                         free(Ptr);
                     }
                 }
@@ -366,7 +372,13 @@ namespace PUERTS_NAMESPACE
             }
             jsObject = new JSObject(InIsolate, InContext, InObject, id);
             JSObjectMap[id] = jsObject;
-            idmap->Set(InContext, InObject, v8::Number::New(InIsolate, id));
+            if (idmap->Set(InContext, InObject, v8::Number::New(InIsolate, id)).IsEmpty())
+            {
+                JSObjectMap.erase(id);
+                ObjectMapFreeIndex.push_back(id);
+                delete jsObject;
+                return nullptr;
+            }
         }
 
         return jsObject;
@@ -387,7 +399,9 @@ namespace PUERTS_NAMESPACE
         v8::Context::Scope ContextScope(Context);
 
         v8::Local<v8::Map> idmap = JSObjectIdMap.Get(InObject->Isolate);
-        idmap->Delete(InObject->Context.Get(Isolate), InObject->GObject.Get(Isolate));
+        static_cast<void>(idmap
+                ->Delete(InObject->Context.Get(Isolate), InObject->GObject.Get(Isolate))
+                .IsJust());
         JSObjectMap.erase(InObject->Index);
 
         ObjectMapFreeIndex.push_back(InObject->Index);
@@ -425,7 +439,13 @@ namespace PUERTS_NAMESPACE
 #endif
             JSFunctions.push_back(Function);
         }
-        InFunction->Set(InContext, FV8Utils::V8String(InIsolate, FUNCTION_INDEX_KEY), v8::Integer::New(InIsolate, Function->Index));
+        if (InFunction->Set(InContext, FV8Utils::V8String(InIsolate, FUNCTION_INDEX_KEY),
+                v8::Integer::New(InIsolate, Function->Index)).IsNothing())
+        {
+            JSFunctions[Function->Index] = nullptr;
+            delete Function;
+            return nullptr;
+        }
         return Function;
     }
 
@@ -440,11 +460,14 @@ namespace PUERTS_NAMESPACE
         v8::Isolate* Isolate = Info.GetIsolate();
         v8::Local<v8::Context> Context = Isolate->GetCurrentContext();
 
-        FCallbackInfo* CallbackInfo = reinterpret_cast<FCallbackInfo*>((v8::Local<v8::External>::Cast(Info.Data()))->Value());
+        FCallbackInfo* CallbackInfo = reinterpret_cast<FCallbackInfo*>(
+            puerts_v8_compatibility::GetExternalValue(v8::Local<v8::External>::Cast(Info.Data()),
+                puerts_v8_compatibility::ExternalPointerTag::CSharpCallbackInfo));
 
         void* Ptr = CallbackInfo->IsStatic ? nullptr
                                            : FV8Utils::GetPoninter(
-                                                 puerts_v8_compatibility::GetFunctionCallbackHolder(Info));
+                                                 puerts_v8_compatibility::GetFunctionCallbackHolder(Info), 0,
+                                                 puerts_v8_compatibility::EmbedderDataTag::NativeObject);
 
 #ifdef MULT_BACKENDS
         auto JsEngine = FV8Utils::IsolateData<JSEngine>(Isolate);
@@ -460,9 +483,14 @@ namespace PUERTS_NAMESPACE
         auto CallbackInfo = new FCallbackInfo(IsStatic, Callback, Data);
         CallbackInfos.push_back(CallbackInfo);
 #if defined(WITH_QUICKJS)
-        return v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap, v8::External::New(Isolate, CallbackInfos[Pos]));
+        return v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap,
+            puerts_v8_compatibility::NewExternal(Isolate, CallbackInfos[Pos],
+                puerts_v8_compatibility::ExternalPointerTag::CSharpCallbackInfo));
 #else
-        return v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap, v8::External::New(Isolate, CallbackInfos[Pos]),  v8::Local<v8::Signature>(), 0,  v8::ConstructorBehavior::kThrow);
+        return v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap,
+            puerts_v8_compatibility::NewExternal(Isolate, CallbackInfos[Pos],
+                puerts_v8_compatibility::ExternalPointerTag::CSharpCallbackInfo),
+            v8::Local<v8::Signature>(), 0, v8::ConstructorBehavior::kThrow);
 #endif
     }
     
@@ -500,9 +528,14 @@ namespace PUERTS_NAMESPACE
         auto CallbackData = new FCallbackInfoWithFinalize(false, Callback, Data, Finalize, this);
 
 #if defined(WITH_QUICKJS)
-        auto Template = v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap, v8::External::New(Isolate, CallbackData));
+        auto Template = v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap,
+            puerts_v8_compatibility::NewExternal(Isolate, CallbackData,
+                puerts_v8_compatibility::ExternalPointerTag::CSharpCallbackInfo));
 #else
-        auto Template = v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap, v8::External::New(Isolate, CallbackData),  v8::Local<v8::Signature>(), 0,  v8::ConstructorBehavior::kThrow);
+        auto Template = v8::FunctionTemplate::New(Isolate, CSharpFunctionCallbackWrap,
+            puerts_v8_compatibility::NewExternal(Isolate, CallbackData,
+                puerts_v8_compatibility::ExternalPointerTag::CSharpCallbackInfo),
+            v8::Local<v8::Signature>(), 0, v8::ConstructorBehavior::kThrow);
         Template->Set(Isolate, "__do_not_cache", v8::ObjectTemplate::New(Isolate));
 #endif
         auto Ret = Template->GetFunction(Context);
@@ -551,12 +584,15 @@ namespace PUERTS_NAMESPACE
         if (Info.IsConstructCall())
         {
             auto Self = Info.This();
-            auto LifeCycleInfo = FV8Utils::ExternalData<FLifeCycleInfo>(Info);
+            auto LifeCycleInfo = FV8Utils::ExternalData<FLifeCycleInfo>(
+                Info, puerts_v8_compatibility::ExternalPointerTag::LifeCycleInfo);
             void *Ptr = nullptr;
 
             if (Info[0]->IsExternal()) //Call by Native
             {
-                Ptr = v8::Local<v8::External>::Cast(Info[0])->Value();
+                Ptr = puerts_v8_compatibility::GetExternalValue(
+                    v8::Local<v8::External>::Cast(Info[0]),
+                    puerts_v8_compatibility::ExternalPointerTag::NativeConstructorArgument);
             }
             else // Call by js new
             {
@@ -602,7 +638,9 @@ namespace PUERTS_NAMESPACE
         auto LifeCycleInfo = new FLifeCycleInfo(ClassId, Constructor, Destructor ? Destructor : GeneralDestructor, Data, Size);
         LifeCycleInfos.push_back(LifeCycleInfo);
         
-        auto Template = v8::FunctionTemplate::New(Isolate, NewWrap, v8::External::New(Isolate, LifeCycleInfos[Pos]));
+        auto Template = v8::FunctionTemplate::New(Isolate, NewWrap,
+            puerts_v8_compatibility::NewExternal(Isolate, LifeCycleInfos[Pos],
+                puerts_v8_compatibility::ExternalPointerTag::LifeCycleInfo));
         
         Template->InstanceTemplate()->SetInternalFieldCount(3);//1: object id, 2: type id, 3: magic
         Templates.push_back(v8::UniquePersistent<v8::FunctionTemplate>(Isolate, Template));
@@ -610,7 +648,16 @@ namespace PUERTS_NAMESPACE
         Metadatas.push_back(v8::UniquePersistent<v8::Map>(Isolate, Map));
 
         NameToTemplateID[FullName] = ClassId;
-        Map->Set(Context, FV8Utils::V8String(Isolate, "classid"), v8::Number::New(Isolate, ClassId));
+        if (Map->Set(Context, FV8Utils::V8String(Isolate, "classid"),
+                v8::Number::New(Isolate, ClassId)).IsEmpty())
+        {
+            NameToTemplateID.erase(FullName);
+            Templates.pop_back();
+            Metadatas.pop_back();
+            delete LifeCycleInfos.back();
+            LifeCycleInfos.pop_back();
+            return -1;
+        }
         Template->SetClassName(FV8Utils::V8String(Isolate, FullName));
 
         if (BaseClassId >= 0)
@@ -669,13 +716,20 @@ namespace PUERTS_NAMESPACE
             if (ReadonlyStaticMembersSetValue->IsNullOrUndefined())
             {
                 ReadonlyStaticMembersSet = v8::Set::New(Isolate);
-                Metadata->Set(Context, NameOfTheSet, ReadonlyStaticMembersSet);
+                if (Metadata->Set(Context, NameOfTheSet, ReadonlyStaticMembersSet).IsEmpty())
+                {
+                    return false;
+                }
             }
             else
             {
                 ReadonlyStaticMembersSet = v8::Local<v8::Set>::Cast(ReadonlyStaticMembersSetValue);
             }
-            ReadonlyStaticMembersSet->Add(Context, FV8Utils::V8String(Isolate, Name));
+            if (ReadonlyStaticMembersSet->Add(
+                    Context, FV8Utils::V8String(Isolate, Name)).IsEmpty())
+            {
+                return false;
+            }
         }
 
         if (IsStatic)
@@ -702,7 +756,11 @@ namespace PUERTS_NAMESPACE
         auto Context = Isolate->GetCurrentContext();
 
         auto Result = Templates[ClassID].Get(Isolate)->GetFunction(Context).ToLocalChecked();
-        Result->Set(Context, FV8Utils::V8String(Isolate, "__puertsMetadata"), Metadatas[ClassID].Get(Isolate));
+        if (Result->Set(Context, FV8Utils::V8String(Isolate, "__puertsMetadata"),
+                Metadatas[ClassID].Get(Isolate)).IsNothing())
+        {
+            return v8::Undefined(Isolate);
+        }
         return Result;
     }
 
@@ -716,7 +774,9 @@ namespace PUERTS_NAMESPACE
         auto Iter = ObjectMap.find(Ptr);
         if (Iter == ObjectMap.end())//create and link
         {
-            auto BindTo = v8::External::New(Context->GetIsolate(), Ptr);
+            auto BindTo = puerts_v8_compatibility::NewExternal(
+                puerts_v8_compatibility::GetIsolate(Context), Ptr,
+                puerts_v8_compatibility::ExternalPointerTag::NativeConstructorArgument);
             v8::Local<v8::Value> Args[] = { BindTo };
             return Templates[ClassID].Get(Isolate)->GetFunction(Context).ToLocalChecked()->NewInstance(Context, 1, Args).ToLocalChecked();
         }
@@ -735,17 +795,22 @@ namespace PUERTS_NAMESPACE
             {
                 memcpy(Val, Ptr, LifeCycleInfo->Size);
             }
-            JSObject->SetAlignedPointerInInternalField(0, Val);
+            puerts_v8_compatibility::SetAlignedPointerInInternalField(
+                JSObject, 0, Val, puerts_v8_compatibility::EmbedderDataTag::NativeObject);
             Ptr = Val;
         }
         else
         {
-            JSObject->SetAlignedPointerInInternalField(0, Ptr);
+            puerts_v8_compatibility::SetAlignedPointerInInternalField(
+                JSObject, 0, Ptr, puerts_v8_compatibility::EmbedderDataTag::NativeObject);
         }
         if (Ptr == nullptr) return;
         
-        JSObject->SetAlignedPointerInInternalField(1, LifeCycleInfo);
-        JSObject->SetAlignedPointerInInternalField(2, reinterpret_cast<void *>(OBJECT_MAGIC));
+        puerts_v8_compatibility::SetAlignedPointerInInternalField(
+            JSObject, 1, LifeCycleInfo, puerts_v8_compatibility::EmbedderDataTag::LifeCycleInfo);
+        puerts_v8_compatibility::SetAlignedPointerInInternalField(
+            JSObject, 2, reinterpret_cast<void *>(OBJECT_MAGIC),
+            puerts_v8_compatibility::EmbedderDataTag::ObjectMagic);
         v8::UniquePersistent<v8::Value> persistent(MainIsolate, JSObject);
         persistent.SetWeak<FLifeCycleInfo>(LifeCycleInfo, OnGarbageCollected, v8::WeakCallbackType::kInternalFields);
         ObjectMap[Ptr] = std::move(persistent);

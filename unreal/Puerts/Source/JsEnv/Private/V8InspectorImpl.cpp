@@ -17,6 +17,7 @@
 #if (PLATFORM_WINDOWS || PLATFORM_MAC || PLATFORM_LINUX || defined(WITH_INSPECTOR)) && !defined(WITHOUT_INSPECTOR)
 
 #include "V8InspectorImpl.h"
+#include "V8Compatibility.h"
 
 #if USING_UE
 #include "UECompatible.h"
@@ -24,8 +25,6 @@
 
 #include <functional>
 #include <string>
-#include <locale>
-#include <codecvt>
 
 PRAGMA_DISABLE_UNDEFINED_IDENTIFIER_WARNINGS
 #pragma warning(push)
@@ -121,6 +120,75 @@ void V8InspectorChannelImpl::OnMessage(std::function<void(const std::string&)> H
     OnSendMessage = Handler;
 }
 
+namespace
+{
+void AppendUtf8(std::string& Output, uint32_t CodePoint)
+{
+    if (CodePoint <= 0x7F)
+    {
+        Output.push_back(static_cast<char>(CodePoint));
+    }
+    else if (CodePoint <= 0x7FF)
+    {
+        Output.push_back(static_cast<char>(0xC0 | (CodePoint >> 6)));
+        Output.push_back(static_cast<char>(0x80 | (CodePoint & 0x3F)));
+    }
+    else if (CodePoint <= 0xFFFF)
+    {
+        Output.push_back(static_cast<char>(0xE0 | (CodePoint >> 12)));
+        Output.push_back(static_cast<char>(0x80 | ((CodePoint >> 6) & 0x3F)));
+        Output.push_back(static_cast<char>(0x80 | (CodePoint & 0x3F)));
+    }
+    else
+    {
+        Output.push_back(static_cast<char>(0xF0 | (CodePoint >> 18)));
+        Output.push_back(static_cast<char>(0x80 | ((CodePoint >> 12) & 0x3F)));
+        Output.push_back(static_cast<char>(0x80 | ((CodePoint >> 6) & 0x3F)));
+        Output.push_back(static_cast<char>(0x80 | (CodePoint & 0x3F)));
+    }
+}
+
+std::string Utf16ToUtf8(const uint16_t* Input, size_t Length)
+{
+    std::string Output;
+    if (Length <= Output.max_size() / 3)
+    {
+        Output.reserve(Length * 3);
+    }
+
+    for (size_t Index = 0; Index < Length; ++Index)
+    {
+        uint32_t CodePoint = Input[Index];
+        if (CodePoint >= 0xD800 && CodePoint <= 0xDBFF)
+        {
+            if (Index + 1 < Length)
+            {
+                const uint32_t Low = Input[Index + 1];
+                if (Low >= 0xDC00 && Low <= 0xDFFF)
+                {
+                    CodePoint = 0x10000 + ((CodePoint - 0xD800) << 10) + (Low - 0xDC00);
+                    ++Index;
+                }
+                else
+                {
+                    CodePoint = 0xFFFD;
+                }
+            }
+            else
+            {
+                CodePoint = 0xFFFD;
+            }
+        }
+        else if (CodePoint >= 0xDC00 && CodePoint <= 0xDFFF)
+        {
+            CodePoint = 0xFFFD;
+        }
+        AppendUtf8(Output, CodePoint);
+    }
+    return Output;
+}
+}
+
 void V8InspectorChannelImpl::SendMessage(v8_inspector::StringBuffer& MessageBuffer)
 {
     v8_inspector::StringView MessageView = MessageBuffer.string();
@@ -128,19 +196,15 @@ void V8InspectorChannelImpl::SendMessage(v8_inspector::StringBuffer& MessageBuff
     std::string Message;
     if (MessageView.is8Bit())
     {
-        Message = reinterpret_cast<const char*>(MessageView.characters8());
+        const size_t Length = MessageView.length();
+        if (Length > 0)
+        {
+            Message.assign(reinterpret_cast<const char*>(MessageView.characters8()), Length);
+        }
     }
     else
     {
-#if PLATFORM_WINDOWS
-#pragma warning(disable : 4996)
-        std::wstring_convert<std::codecvt_utf8_utf16<uint16_t>, uint16_t> Conv;
-        const uint16_t* Start = MessageView.characters16();
-#else
-        std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> Conv;
-        const char16_t* Start = reinterpret_cast<const char16_t*>(MessageView.characters16());
-#endif
-        Message = Conv.to_bytes(Start, Start + MessageView.length());
+        Message = Utf16ToUtf8(MessageView.characters16(), MessageView.length());
     }
 
     if (OnSendMessage)
@@ -245,6 +309,10 @@ private:
 
     bool IsAlive;
 
+    bool IsListening;
+
+    bool ContextRegistered;
+
     bool IsPaused;
 
     bool Connected;
@@ -288,12 +356,15 @@ V8InspectorClientImpl::V8InspectorClientImpl(int32_t InPort, v8::Local<v8::Conte
 #endif
 #endif
 {
-    Isolate = InContext->GetIsolate();
+    Isolate = puerts_v8_compatibility::GetIsolate(InContext);
     Context.Reset(Isolate, InContext);
     MicroTasksRunner.Reset(
         Isolate, v8::FunctionTemplate::New(Isolate, MicroTasksRunnerFunction)->GetFunction(InContext).ToLocalChecked());
     Port = InPort;
     IsAlive = false;
+    IsListening = false;
+    ContextRegistered = false;
+    IsPaused = false;
     Connected = false;
 
     static int32_t CurrentCtxGroupID = 1;
@@ -306,6 +377,7 @@ V8InspectorClientImpl::V8InspectorClientImpl(int32_t InPort, v8::Local<v8::Conte
     V8Inspector = v8_inspector::V8Inspector::create(Isolate, this);
 #endif
     V8Inspector->contextCreated(v8_inspector::V8ContextInfo(InContext, CtxGroupID, CtxName));
+    ContextRegistered = true;
 
     if (Port < 0)
         return;
@@ -325,6 +397,7 @@ V8InspectorClientImpl::V8InspectorClientImpl(int32_t InPort, v8::Local<v8::Conte
 
         Server.init_asio();
         Server.listen(Port);
+        IsListening = true;
         Server.start_accept();
 
         JSONVersion = R"({
@@ -388,24 +461,46 @@ V8InspectorClientImpl::~V8InspectorClientImpl()
 
 void V8InspectorClientImpl::Close()
 {
-    if (IsAlive)
+    if (IsListening)
+    {
+        try
+        {
+            Server.stop_listening();
+        }
+        catch (const websocketpp::exception& Exception)
+        {
+#if USING_UE
+            ReportException(Exception, TEXT("Failed to Stop Inspector"));
+#else
+            puerts::PLog(puerts::Error, "V8InspectorClientImpl: %s", Exception.what());
+#endif
+        }
+        IsListening = false;
+    }
+
+    if (!V8InspectorChannels.empty() || ContextRegistered)
     {
 #ifdef THREAD_SAFE
         v8::Locker Locker(Isolate);
 #endif
-        Server.stop_listening();
+        v8::Isolate::Scope IsolateScope(Isolate);
+        v8::HandleScope HandleScope(Isolate);
         for (auto Iter = V8InspectorChannels.begin(); Iter != V8InspectorChannels.end(); ++Iter)
         {
             delete Iter->second;
         }
         V8InspectorChannels.clear();
 
-        v8::Isolate::Scope IsolateScope(Isolate);
-        v8::HandleScope HandleScope(Isolate);
-        V8Inspector->contextDestroyed(Context.Get(Isolate));
-        IsAlive = false;
-        IsPaused = false;
+        if (ContextRegistered)
+        {
+            V8Inspector->contextDestroyed(Context.Get(Isolate));
+            ContextRegistered = false;
+        }
     }
+    IsAlive = false;
+    IsPaused = false;
+    Context.Reset();
+    MicroTasksRunner.Reset();
 }
 
 bool V8InspectorClientImpl::Tick(float /* DeltaTime */)

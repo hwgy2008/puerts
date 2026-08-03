@@ -125,6 +125,8 @@ private:
 
     void OnFail(wspp_connection_hdl Handle);
 
+    void CallHandler(HandlerType Type, int ArgumentCount, v8::Local<v8::Value>* Arguments);
+
     void Cleanup();
 
 private:
@@ -322,8 +324,22 @@ void V8WebSocketClientImpl::Statue(const v8::FunctionCallbackInfo<v8::Value>& In
 
     res->Set(context, 0, v8::Int32::New(isolate, ec.value())).Check();
     res->Set(context, 1,
-        v8::String::NewFromUtf8(isolate, ec.message().c_str(), v8::NewStringType::kNormal, ec.message().size()).ToLocalChecked());
+        v8::String::NewFromUtf8(isolate, ec.message().c_str(), v8::NewStringType::kNormal,
+            ec.message().size()).ToLocalChecked()).Check();
     Info.GetReturnValue().Set(res);
+}
+
+void V8WebSocketClientImpl::CallHandler(
+    HandlerType Type, int ArgumentCount, v8::Local<v8::Value>* Arguments)
+{
+    auto Context = GContext.Get(Isolate);
+    v8::Context::Scope ContextScope(Context);
+    // WebSocket 回调由原生轮询触发，异常不能跨越该边界并污染后续 V8 调用。
+    v8::TryCatch TryCatch(Isolate);
+    static_cast<void>(Handles[Type]
+            .Get(Isolate)
+            ->Call(Context, v8::Undefined(Isolate), ArgumentCount, Arguments)
+            .IsEmpty());
 }
 
 void V8WebSocketClientImpl::CloseImmediately(websocketpp::close::status::value const code, std::string const& reason)
@@ -353,9 +369,7 @@ void V8WebSocketClientImpl::OnOpen(wspp_connection_hdl InHandle)
     v8::HandleScope HandleScope(Isolate);
     if (!Handles[ON_OPEN].IsEmpty())
     {
-        v8::Local<v8::Value> args[1];
-        // must not raise exception in js, recommend just push a pending msg and process later.
-        Handles[ON_OPEN].Get(Isolate)->Call(GContext.Get(Isolate), v8::Undefined(Isolate), 0, args);
+        CallHandler(ON_OPEN, 0, nullptr);
     }
 }
 
@@ -384,8 +398,7 @@ void V8WebSocketClientImpl::OnMessage(wspp_connection_hdl InHandle, wspp_message
         {
             args[0] = v8::Undefined(Isolate);
         }
-        // must not raise exception in js, recommend just push a pending msg and process later.
-        Handles[ON_MESSAGE].Get(Isolate)->Call(GContext.Get(Isolate), v8::Undefined(Isolate), 1, args);
+        CallHandler(ON_MESSAGE, 1, args);
     }
 }
 
@@ -401,8 +414,7 @@ void V8WebSocketClientImpl::OnClose(wspp_connection_hdl InHandle)
             v8::String::NewFromUtf8(
                 Isolate, con->get_remote_close_reason().c_str(), v8::NewStringType::kNormal, con->get_remote_close_reason().size())
                 .ToLocalChecked()};
-        // must not raise exception in js, recommend just push a pending msg and process later.
-        Handles[ON_CLOSE].Get(Isolate)->Call(GContext.Get(Isolate), v8::Undefined(Isolate), 2, args);
+        CallHandler(ON_CLOSE, 2, args);
     }
     Cleanup();
 }
@@ -419,8 +431,7 @@ void V8WebSocketClientImpl::OnFail(wspp_connection_hdl InHandle)
         ss << "on fail: " << con->get_ec().message() << "[" << con->get_ec().value() << "]" << std::endl;
         v8::Local<v8::Value> args[1] = {
             v8::String::NewFromUtf8(Isolate, ss.str().c_str(), v8::NewStringType::kNormal, ss.str().size()).ToLocalChecked()};
-        // must not raise exception in js, recommend just push a pending msg and process later.
-        Handles[ON_FAIL].Get(Isolate)->Call(GContext.Get(Isolate), v8::Undefined(Isolate), 1, args);
+        CallHandler(ON_FAIL, 1, args);
     }
     CloseImmediately(websocketpp::close::status::abnormal_close, "");
 }
@@ -429,13 +440,14 @@ void V8WebSocketClientImpl::OnFail(wspp_connection_hdl InHandle)
 
 void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
 {
-    auto Isolate = Context->GetIsolate();
-    auto WSTemplate = v8::FunctionTemplate::New(Context->GetIsolate(),
+    auto Isolate = puerts_v8_compatibility::GetIsolate(Context);
+    auto WSTemplate = v8::FunctionTemplate::New(Isolate,
         [](const v8::FunctionCallbackInfo<v8::Value>& Info)
         {
             auto ws =
                 new PUERTS_NAMESPACE::V8WebSocketClientImpl(Info.GetIsolate(), Info.GetIsolate()->GetCurrentContext(), Info.This());
-            Info.This()->SetAlignedPointerInInternalField(0, ws);
+            puerts_v8_compatibility::SetAlignedPointerInInternalField(
+                Info.This(), 0, ws, puerts_v8_compatibility::EmbedderDataTag::WebSocketClient);
             ws->Connect(Info);
         });
     WSTemplate->InstanceTemplate()->SetInternalFieldCount(1);
@@ -444,7 +456,9 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info) {
                 static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
-                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
+                    puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                        puerts_v8_compatibility::GetFunctionCallbackHolder(Info), 0,
+                        puerts_v8_compatibility::EmbedderDataTag::WebSocketClient))
                     ->Send(Info);
             }));
 
@@ -453,7 +467,9 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
             [](const v8::FunctionCallbackInfo<v8::Value>& Info)
             {
                 static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
-                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
+                    puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                        puerts_v8_compatibility::GetFunctionCallbackHolder(Info), 0,
+                        puerts_v8_compatibility::EmbedderDataTag::WebSocketClient))
                     ->SetHandles(Info);
             }));
 
@@ -461,7 +477,9 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info) {
                 static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
-                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
+                    puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                        puerts_v8_compatibility::GetFunctionCallbackHolder(Info), 0,
+                        puerts_v8_compatibility::EmbedderDataTag::WebSocketClient))
                     ->Close(Info);
             }));
 
@@ -469,7 +487,9 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
         v8::FunctionTemplate::New(Isolate,
             [](const v8::FunctionCallbackInfo<v8::Value>& Info) {
                 static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
-                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
+                    puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                        puerts_v8_compatibility::GetFunctionCallbackHolder(Info), 0,
+                        puerts_v8_compatibility::EmbedderDataTag::WebSocketClient))
                     ->Statue(Info);
             }));
 
@@ -479,12 +499,16 @@ void InitWebsocketPPWrap(v8::Local<v8::Context> Context)
             {
                 v8::TryCatch TryCatch(Info.GetIsolate());
                 static_cast<PUERTS_NAMESPACE::V8WebSocketClientImpl*>(
-                    puerts_v8_compatibility::GetFunctionCallbackHolder(Info)->GetAlignedPointerFromInternalField(0))
+                    puerts_v8_compatibility::GetAlignedPointerFromInternalField(
+                        puerts_v8_compatibility::GetFunctionCallbackHolder(Info), 0,
+                        puerts_v8_compatibility::EmbedderDataTag::WebSocketClient))
                     ->PollOne();
             }));
 
-    Context->Global()->Set(Context, v8::String::NewFromUtf8(Isolate, "WebSocketPP").ToLocalChecked(),
-        WSTemplate->GetFunction(Context).ToLocalChecked());
+    Context->Global()
+        ->Set(Context, v8::String::NewFromUtf8(Isolate, "WebSocketPP").ToLocalChecked(),
+            WSTemplate->GetFunction(Context).ToLocalChecked())
+        .Check();
 }
 
 #endif
