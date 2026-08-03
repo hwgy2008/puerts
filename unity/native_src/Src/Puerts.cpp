@@ -516,7 +516,13 @@ V8_EXPORT const char* GetArrayBufferFromValue(v8::Isolate* Isolate, v8::Value *V
         }
         else if (Value->IsArrayBuffer())
         {
-            auto Ab = v8::ArrayBuffer::Cast(Value);
+            v8::Local<v8::Object> ArrayBufferObject;
+            if (!Value->ToObject(Isolate->GetCurrentContext()).ToLocal(&ArrayBufferObject))
+            {
+                *Length = 0;
+                return nullptr;
+            }
+            auto Ab = ArrayBufferObject.As<v8::ArrayBuffer>();
             size_t BufferLength = 0;
             void* BufferData = puerts_v8_compatibility::GetArrayBufferData(Ab, BufferLength);
             if (BufferLength == 0 || BufferData == nullptr ||
