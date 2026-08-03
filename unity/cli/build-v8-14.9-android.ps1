@@ -161,33 +161,38 @@ try {
 
         $buildDirectory = Join-Path $nativeSrc "build_android_${archName}_${backendName}"
         $buildRules = Join-Path $buildDirectory 'build.ninja'
+        $toolchainRules = Join-Path $buildDirectory 'CMakeFiles\rules.ninja'
         $cmakeCache = Join-Path $buildDirectory 'CMakeCache.txt'
         Require-Path $buildRules "$abi Ninja 构建规则"
+        Require-Path $toolchainRules "$abi Ninja 工具链规则"
         Require-Path $cmakeCache "$abi CMakeCache.txt"
-        $rules = Get-Content -Raw -LiteralPath $buildRules
+        $buildGraph = Get-Content -Raw -LiteralPath $buildRules
+        $toolchain = Get-Content -Raw -LiteralPath $toolchainRules
         $cache = Get-Content -Raw -LiteralPath $cmakeCache
         $normalizedNdk = $Ndk.Replace('\', '/')
         if ($cache.Replace('\', '/') -notmatch [regex]::Escape($normalizedNdk)) {
             throw "$abi CMake cache 未绑定固定 NDK：$Ndk"
         }
-        if ($cache -notmatch '(?m)^CMAKE_SYSTEM_VERSION(?::[^=]+)?=23\s*$' -or
+        if ($cache -notmatch '(?m)^ANDROID_PLATFORM(?::[^=]+)?=android-23\s*$' -or
             $cache -notmatch '(?m)^ANDROID_STL(?::[^=]+)?=c\+\+_static\s*$') {
             throw "$abi CMake cache 的 API 23/c++_static 配置不匹配"
         }
-        if ($rules -notmatch [regex]::Escape("--target=$($targetTriple[$archName])")) {
+        if ($toolchain -notmatch [regex]::Escape("--target=$($targetTriple[$archName])")) {
             throw "$abi 编译命令未使用 API 23 target triple"
         }
-        if ($rules -notmatch 'libc\+\+_static\.a') {
-            throw "$abi 链接命令未使用 libc++_static.a"
+        if ($buildGraph -notmatch '(?m)(?:^|\s)-static-libstdc\+\+(?:\s|$)') {
+            throw "$abi 工具链规则未启用静态 C++ 运行库"
         }
         foreach ($definition in @('WITH_INSPECTOR', 'WITH_WEBSOCKET', 'V8_TARGET_OS_ANDROID')) {
-            if ($rules -notmatch "(?<![A-Za-z0-9_])$definition(?![A-Za-z0-9_])") {
+            $definitionToken = [regex]::Escape("-D$definition")
+            if ($buildGraph -notmatch "(?m)(?:^|\s)$definitionToken(?:\s|$)") {
                 throw "$abi 未带编译定义 $definition"
             }
         }
         $compressionDefinitions = @('V8_COMPRESS_POINTERS', 'V8_COMPRESS_POINTERS_IN_SHARED_CAGE', 'V8_31BIT_SMIS_ON_64BIT_ARCH')
         foreach ($definition in $compressionDefinitions) {
-            $present = $rules -match "(?<![A-Za-z0-9_])$definition(?![A-Za-z0-9_])"
+            $definitionToken = [regex]::Escape("-D$definition")
+            $present = $buildGraph -match "(?m)(?:^|\s)$definitionToken(?:\s|$)"
             if ($archName -eq 'armv7' -and $present) { throw "armeabi-v7a 意外包含 $definition" }
             if ($archName -ne 'armv7' -and !$present) { throw "$abi 缺少 $definition" }
         }
@@ -234,6 +239,7 @@ try {
             puertsTree = $puertsTree
             cmakeCacheSha256 = (Get-FileHash -LiteralPath $cmakeCache -Algorithm SHA256).Hash.ToLowerInvariant()
             ninjaRulesSha256 = (Get-FileHash -LiteralPath $buildRules -Algorithm SHA256).Hash.ToLowerInvariant()
+            ninjaToolchainRulesSha256 = (Get-FileHash -LiteralPath $toolchainRules -Algorithm SHA256).Hash.ToLowerInvariant()
             sha256 = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
             size = (Get-Item -LiteralPath $destination).Length
         }
