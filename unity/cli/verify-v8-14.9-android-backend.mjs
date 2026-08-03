@@ -14,13 +14,29 @@ const expected = {
     'x86_64': { cliArch: 'x64', cpu: 'x64', backendDirectory: 'x64', ndkTriple: 'x86_64-linux-android', pointerCompression: true },
 };
 const expectedBuilderFiles = {
-    packageScript: { path: 'node-script/package_v8_14_9_android.js', contentSha256LfNormalized: '8778ea46638f65f11c8ad7a3b580ccedc6bb3bd6ed053735fcb90f16b29b09b4' },
     injectionScript: { path: 'node-script/add_arraybuffer_new_without_stl.js', contentSha256LfNormalized: 'abd8fcf485c0f06e896a720b48ce3d9456f83402cd5a0cc5fce28a2d472c3326' },
     gitPatchScript: { path: 'node-script/do-gitpatch.js', contentSha256LfNormalized: '2c79d33303fef73be9c9a2242ef01866c03726c5242ee629ae990c78f3965c70' },
-    wee8Patch: { path: 'patches/enable_wee8_v14.9.207.39.patch', contentSha256LfNormalized: '9ea027e580bac1d4a5bf71a089cea64580c08e8b0f938f42fc4d41c2854c8217' },
-    armv7Script: { path: 'android_armv7.sh', contentSha256LfNormalized: 'c5bad8d778e84bddd9241bd26120a1bf37fd456eabde9f32f1160192b1156974' },
-    arm64Script: { path: 'android_armv8.sh', contentSha256LfNormalized: 'e9cba3bdac9da51e470ed307200eef2922f3130a4e64de91dbb74fb1ffe0f8ef' },
-    x64Script: { path: 'android_x64.sh', contentSha256LfNormalized: '3db71e75c4cc8646c340afd6270cc6691c4ca4e1134891b6cff3e9cf1a2bfc18' },
+    wee8Patch: { path: 'patches/enable_wee8_v14.9.207.39.patch', contentSha256LfNormalized: 'a5a2b7e990662e86e665c2d6d6019666297147f74e3cbc1dc06f460fdf8e6598' },
+    armv7Script: { path: 'android_armv7.sh', contentSha256LfNormalized: '7cd8cdffa834ce3e01e690d318658afa2d150861256367c3651f068e2d614fc0' },
+    arm64Script: { path: 'android_armv8.sh', contentSha256LfNormalized: 'aaef73742d93a2a67a69d496b45ff5fd9f3ef034492350c9c4a5fcc445bbf4b8' },
+    x64Script: { path: 'android_x64.sh', contentSha256LfNormalized: 'a851b9b614f206f6aadf93a54a9f5c5fc4671d54449aad8769f78473b2bd8039' },
+};
+const expectedBuilderByAbi = {
+    'armeabi-v7a': {
+        commit: 'c0217135f0a0d1df6fe9b19905812885af5dde2e',
+        packageScriptSha256: '92d86edd9b05a2c7feb6b75a88ea7057431a093671b4a50bfcb4313a584bae34',
+        symbolRenameScriptSha256: '73605b46470453a08571a8213169dad770e583ed0832e07cd28d98ee3e38cb57',
+    },
+    'arm64-v8a': {
+        commit: 'afb00d0dad9bf475de086ecb29b9a3e49e02d760',
+        packageScriptSha256: '65494569b83f3af98f216bb725e5837efe34dfb7594e7b1919fb329aabf43225',
+        symbolRenameScriptSha256: 'e7bc4b54cff1630dd4b359bef936655395a9996baf056f7bcf03fe7cb3fb9f14',
+    },
+    'x86_64': {
+        commit: 'afb00d0dad9bf475de086ecb29b9a3e49e02d760',
+        packageScriptSha256: '65494569b83f3af98f216bb725e5837efe34dfb7594e7b1919fb329aabf43225',
+        symbolRenameScriptSha256: 'e7bc4b54cff1630dd4b359bef936655395a9996baf056f7bcf03fe7cb3fb9f14',
+    },
 };
 const allowedV8Changes = new Set([
     'BUILD.gn',
@@ -64,6 +80,12 @@ function hashTree(root) {
     return hash.digest('hex');
 }
 
+function getNdkClangIdentity(version) {
+    const match = version.match(/^Android \((\d+), .*?based on (r[0-9a-f]+)\) clang version ([0-9.]+) \([^)]* ([0-9a-f]{40})\)$/);
+    if (!match) fail(`无法解析 NDK clang 身份：${version}`);
+    return match.slice(1).join('/');
+}
+
 function getNdkFingerprint(root, ndkTriple) {
     const sourcePropertiesPath = path.join(root, 'source.properties');
     const sourceProperties = fs.readFileSync(sourcePropertiesPath, 'utf8');
@@ -104,7 +126,6 @@ if (headersOnly) {
     console.log(JSON.stringify({ backendRoot, headerSha256: headerHash, result: 'PASS' }));
     process.exit(0);
 }
-let commonBuilderCommit = null;
 let commonV8DiffSha256 = null;
 let commonCompilerFingerprint = null;
 let commonNdkFingerprint = null;
@@ -134,12 +155,22 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
     if (manifest.depotToolsCommit !== 'e051c661c3785286de8623547e3a1574b989a428') {
         fail(`${abi} depot_tools 版本不匹配`);
     }
-    if (!/^[0-9a-f]{40}$/.test(manifest.builder?.commit ?? '') || manifest.builder?.cleanWorktree !== true) {
+    const expectedBuilder = expectedBuilderByAbi[abi];
+    if (manifest.builder?.commit !== expectedBuilder.commit || manifest.builder?.cleanWorktree !== true) {
         fail(`${abi} backend-v8 构建仓库溯源无效`);
     }
-    if (commonBuilderCommit === null) commonBuilderCommit = manifest.builder.commit;
-    else if (manifest.builder.commit !== commonBuilderCommit) fail(`${abi} backend-v8 commit 与其他 ABI 不一致`);
-    for (const [name, expectedFile] of Object.entries(expectedBuilderFiles)) {
+    const abiBuilderFiles = {
+        ...expectedBuilderFiles,
+        packageScript: {
+            path: 'node-script/package_v8_14_9_android.js',
+            contentSha256LfNormalized: expectedBuilder.packageScriptSha256,
+        },
+        symbolRenameScript: {
+            path: 'rename_symbols_posix.sh',
+            contentSha256LfNormalized: expectedBuilder.symbolRenameScriptSha256,
+        },
+    };
+    for (const [name, expectedFile] of Object.entries(abiBuilderFiles)) {
         const actualFile = manifest.builder.files?.[name];
         if (actualFile?.path !== expectedFile.path ||
             actualFile?.contentSha256LfNormalized !== expectedFile.contentSha256LfNormalized) {
@@ -196,10 +227,10 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
     if (commonNdkFingerprint === null) commonNdkFingerprint = ndkFingerprint;
     else if (ndkFingerprint !== commonNdkFingerprint) fail(`${abi} NDK 公共工具链与其他 ABI 不一致`);
     const features = manifest.features ?? {};
-    for (const enabled of ['maglev', 'sparkplug', 'turbofan']) {
+    for (const enabled of ['maglev', 'sparkplug', 'turbofan', 'customLibcxx', 'allocatorSymbolsIsolated']) {
         if (features[enabled] !== true) fail(`${abi} 未开启 ${enabled}`);
     }
-    for (const disabled of ['sandbox', 'webAssembly', 'externalStartupData', 'i18n', 'temporal', 'customLibcxx']) {
+    for (const disabled of ['sandbox', 'webAssembly', 'externalStartupData', 'i18n', 'temporal']) {
         if (features[disabled] !== false) fail(`${abi} ${disabled} 配置不符合固定方案`);
     }
     if (features.pointerCompression !== abiExpected.pointerCompression ||
@@ -208,12 +239,28 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
     }
     if (ndkRoot) {
         const localNdk = getNdkFingerprint(ndkRoot, abiExpected.ndkTriple);
-        for (const [name, value] of Object.entries(localNdk)) {
-            if (manifest.ndk[name] !== value) fail(`${abi} consumer NDK ${name} 与 backend 不一致`);
+        for (const name of ['revision', 'sourcePropertiesSha256', 'libcxxHeadersSha256', 'targetSysrootSha256']) {
+            if (manifest.ndk[name] !== localNdk[name]) fail(`${abi} consumer NDK ${name} 与 backend 不一致`);
+        }
+        if (getNdkClangIdentity(manifest.ndk.ndkClangVersion) !== getNdkClangIdentity(localNdk.ndkClangVersion)) {
+            fail(`${abi} consumer NDK clang 身份与 backend 不一致`);
         }
     }
     const library = path.join(backendRoot, ...manifest.files.library.path.split('/'));
     if (sha256File(library) !== manifest.files.library.sha256) fail(`${abi} libwee8.a 哈希不匹配`);
+    const snapshotTool = manifest.files.snapshotTool;
+    const expectedSnapshotPath = `Bin/Android/${abiExpected.backendDirectory}/mksnapshot`;
+    if (snapshotTool?.path !== expectedSnapshotPath ||
+        !/(^|\/)mksnapshot$/.test(snapshotTool?.sourcePath ?? '') ||
+        !Number.isSafeInteger(snapshotTool?.size) || snapshotTool.size <= 0 ||
+        !/^[0-9a-f]{64}$/.test(snapshotTool?.sha256 ?? '')) {
+        fail(`${abi} snapshot tool 清单无效`);
+    }
+    const snapshotFile = path.join(backendRoot, ...snapshotTool.path.split('/'));
+    if (fs.statSync(snapshotFile).size !== snapshotTool.size ||
+        sha256File(snapshotFile) !== snapshotTool.sha256) {
+        fail(`${abi} mksnapshot 文件与清单不匹配`);
+    }
     const configuredLibraries = backendConfig?.config?.['link-libraries']?.android?.[abiExpected.cliArch] ?? [];
     if (configuredLibraries.length !== 1 || configuredLibraries[0].replace(/^\//, '') !== manifest.files.library.path) {
         fail(`${abi} backends.json 链接路径与 manifest 不一致`);
