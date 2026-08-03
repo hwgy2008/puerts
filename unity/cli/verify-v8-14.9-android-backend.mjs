@@ -16,26 +16,31 @@ const expected = {
 const expectedBuilderFiles = {
     injectionScript: { path: 'node-script/add_arraybuffer_new_without_stl.js', contentSha256LfNormalized: 'abd8fcf485c0f06e896a720b48ce3d9456f83402cd5a0cc5fce28a2d472c3326' },
     gitPatchScript: { path: 'node-script/do-gitpatch.js', contentSha256LfNormalized: '2c79d33303fef73be9c9a2242ef01866c03726c5242ee629ae990c78f3965c70' },
+    libcxxSymbolMap: { path: 'v8_14_9_android_libcxx_redefinitions.txt', contentSha256LfNormalized: '86fcf1ca519c8abc2f4246604b52deb699de26c3a1e3594f531bcc9d89de9609' },
     wee8Patch: { path: 'patches/enable_wee8_v14.9.207.39.patch', contentSha256LfNormalized: 'a5a2b7e990662e86e665c2d6d6019666297147f74e3cbc1dc06f460fdf8e6598' },
-    armv7Script: { path: 'android_armv7.sh', contentSha256LfNormalized: '7cd8cdffa834ce3e01e690d318658afa2d150861256367c3651f068e2d614fc0' },
-    arm64Script: { path: 'android_armv8.sh', contentSha256LfNormalized: 'aaef73742d93a2a67a69d496b45ff5fd9f3ef034492350c9c4a5fcc445bbf4b8' },
-    x64Script: { path: 'android_x64.sh', contentSha256LfNormalized: 'a851b9b614f206f6aadf93a54a9f5c5fc4671d54449aad8769f78473b2bd8039' },
+    armv7Script: { path: 'android_armv7.sh', contentSha256LfNormalized: 'bc4b9bbdd035e4105a2bc22b79a39b5454b0ebf5ea7c075b52506df886acf9d3' },
+    arm64Script: { path: 'android_armv8.sh', contentSha256LfNormalized: 'b7598176b606c58f5a22e8a43e4c142588a3b8a9b119f9949744c6679bb79836' },
+    x64Script: { path: 'android_x64.sh', contentSha256LfNormalized: 'c347a03ee30a9fe033abcc3522f9d53b715dde998de61390b046c2cfcc1f653a' },
 };
 const expectedBuilderByAbi = {
     'armeabi-v7a': {
-        commit: 'c0217135f0a0d1df6fe9b19905812885af5dde2e',
-        packageScriptSha256: '92d86edd9b05a2c7feb6b75a88ea7057431a093671b4a50bfcb4313a584bae34',
-        symbolRenameScriptSha256: '73605b46470453a08571a8213169dad770e583ed0832e07cd28d98ee3e38cb57',
+        commit: '00a2af73b38a766abc803a8fbb2e9b8be5ef6f49',
+        packageScriptSha256: '3b2735254e8b5520a89541f1aa710646e0304e5a3adb9c3019d3bafb3c7758e6',
+        symbolRenameScriptSha256: '4b3fa53e27cf2b32474ae8006d5e8227ea37d2cbfac276dd822b41ed626d9791',
     },
     'arm64-v8a': {
-        commit: 'afb00d0dad9bf475de086ecb29b9a3e49e02d760',
-        packageScriptSha256: '65494569b83f3af98f216bb725e5837efe34dfb7594e7b1919fb329aabf43225',
-        symbolRenameScriptSha256: 'e7bc4b54cff1630dd4b359bef936655395a9996baf056f7bcf03fe7cb3fb9f14',
+        commit: '827879a89cf90826eebdc68e36389b10511e0805',
+        packageScriptSha256: 'd86a700e6cfab85e79c512cab661b25a7287cdf6580c7bae9f137103758d004f',
+        symbolRenameScriptSha256: '4b3fa53e27cf2b32474ae8006d5e8227ea37d2cbfac276dd822b41ed626d9791',
+        arm64ScriptSha256: 'd17cc6de34681f6ab0073d72842d8e41fe2c61260cb8e29e952aee8f570cc48f',
+        x64ScriptSha256: '409bfe8329417aa180316be1634009b4f8cbe6d053ae3991e3eb3ca11e8c7de8',
     },
     'x86_64': {
-        commit: 'afb00d0dad9bf475de086ecb29b9a3e49e02d760',
-        packageScriptSha256: '65494569b83f3af98f216bb725e5837efe34dfb7594e7b1919fb329aabf43225',
-        symbolRenameScriptSha256: 'e7bc4b54cff1630dd4b359bef936655395a9996baf056f7bcf03fe7cb3fb9f14',
+        commit: '827879a89cf90826eebdc68e36389b10511e0805',
+        packageScriptSha256: 'd86a700e6cfab85e79c512cab661b25a7287cdf6580c7bae9f137103758d004f',
+        symbolRenameScriptSha256: '4b3fa53e27cf2b32474ae8006d5e8227ea37d2cbfac276dd822b41ed626d9791',
+        arm64ScriptSha256: 'd17cc6de34681f6ab0073d72842d8e41fe2c61260cb8e29e952aee8f570cc48f',
+        x64ScriptSha256: '409bfe8329417aa180316be1634009b4f8cbe6d053ae3991e3eb3ca11e8c7de8',
     },
 };
 const allowedV8Changes = new Set([
@@ -78,6 +83,23 @@ function hashTree(root) {
         hash.update('\0');
     }
     return hash.digest('hex');
+}
+
+function readExternalSymbolInventory(llvmNm, archive) {
+    const output = childProcess.execFileSync(llvmNm,
+        ['--extern-only', '--format=posix', archive], {
+            encoding: 'utf8',
+            maxBuffer: 128 * 1024 * 1024,
+        });
+    const all = new Set();
+    const strong = new Set();
+    for (const line of output.split(/\r?\n/)) {
+        const match = line.match(/^(\S+)\s+([A-Za-z?])(?:\s|$)/);
+        if (!match) continue;
+        all.add(match[1]);
+        if (/^[ABCDGIRST]$/.test(match[2])) strong.add(match[1]);
+    }
+    return { all, strong };
 }
 
 function getNdkClangIdentity(version) {
@@ -170,6 +192,18 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
             contentSha256LfNormalized: expectedBuilder.symbolRenameScriptSha256,
         },
     };
+    if (expectedBuilder.arm64ScriptSha256) {
+        abiBuilderFiles.arm64Script = {
+            path: 'android_armv8.sh',
+            contentSha256LfNormalized: expectedBuilder.arm64ScriptSha256,
+        };
+    }
+    if (expectedBuilder.x64ScriptSha256) {
+        abiBuilderFiles.x64Script = {
+            path: 'android_x64.sh',
+            contentSha256LfNormalized: expectedBuilder.x64ScriptSha256,
+        };
+    }
     for (const [name, expectedFile] of Object.entries(abiBuilderFiles)) {
         const actualFile = manifest.builder.files?.[name];
         if (actualFile?.path !== expectedFile.path ||
@@ -227,7 +261,15 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
     if (commonNdkFingerprint === null) commonNdkFingerprint = ndkFingerprint;
     else if (ndkFingerprint !== commonNdkFingerprint) fail(`${abi} NDK 公共工具链与其他 ABI 不一致`);
     const features = manifest.features ?? {};
-    for (const enabled of ['maglev', 'sparkplug', 'turbofan', 'customLibcxx', 'allocatorSymbolsIsolated']) {
+    for (const enabled of [
+        'maglev',
+        'sparkplug',
+        'turbofan',
+        'customLibcxx',
+        'allocatorSymbolsIsolated',
+        'libcxxStrongSymbolsIsolated',
+        'wholeArchiveLinkProbe',
+    ]) {
         if (features[enabled] !== true) fail(`${abi} 未开启 ${enabled}`);
     }
     for (const disabled of ['sandbox', 'webAssembly', 'externalStartupData', 'i18n', 'temporal']) {
@@ -236,6 +278,10 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
     if (features.pointerCompression !== abiExpected.pointerCompression ||
         features.pointerCompressionSharedCage !== abiExpected.pointerCompression) {
         fail(`${abi} 指针压缩配置不匹配`);
+    }
+    if (abiExpected.pointerCompression &&
+        (features.partitionAlloc !== false || features.allocatorShim !== false)) {
+        fail(`${abi} 必须关闭 standalone PartitionAlloc 与 allocator shim`);
     }
     if (ndkRoot) {
         const localNdk = getNdkFingerprint(ndkRoot, abiExpected.ndkTriple);
@@ -248,6 +294,23 @@ for (const [abi, abiExpected] of Object.entries(expected)) {
     }
     const library = path.join(backendRoot, ...manifest.files.library.path.split('/'));
     if (sha256File(library) !== manifest.files.library.sha256) fail(`${abi} libwee8.a 哈希不匹配`);
+    if (ndkRoot) {
+        const host = process.platform === 'win32' ? 'windows-x86_64' : 'linux-x86_64';
+        const toolchain = path.join(ndkRoot, 'toolchains', 'llvm', 'prebuilt', host);
+        const llvmNm = path.join(toolchain, 'bin', process.platform === 'win32' ? 'llvm-nm.exe' : 'llvm-nm');
+        const ndkLibcxx = path.join(toolchain, 'sysroot', 'usr', 'lib', abiExpected.ndkTriple, 'libc++_static.a');
+        const backendSymbols = readExternalSymbolInventory(llvmNm, library);
+        const ndkSymbols = readExternalSymbolInventory(llvmNm, ndkLibcxx);
+        const overlaps = [...backendSymbols.strong]
+            .filter((symbol) => ndkSymbols.strong.has(symbol))
+            .sort();
+        if (overlaps.length !== 0) {
+            fail(`${abi} libwee8.a 与 consumer NDK libc++ 存在强符号冲突：\n${overlaps.join('\n')}`);
+        }
+        for (const symbol of ['__real_realpath', '__real_getcwd', '__wrap_realpath', '__wrap_getcwd']) {
+            if (backendSymbols.all.has(symbol)) fail(`${abi} libwee8.a 意外包含 allocator shim 符号：${symbol}`);
+        }
+    }
     const snapshotTool = manifest.files.snapshotTool;
     const expectedSnapshotPath = `Bin/Android/${abiExpected.backendDirectory}/mksnapshot`;
     if (snapshotTool?.path !== expectedSnapshotPath ||

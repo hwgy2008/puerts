@@ -230,6 +230,8 @@ try {
             minSdk = 23
             maglev = $true
             pointerCompression = ($archName -ne 'armv7')
+            partitionAlloc = $false
+            allocatorShim = $false
             inspector = $true
             webSocket = $true
             backendManifestSha256 = (Get-FileHash -LiteralPath $backendManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
