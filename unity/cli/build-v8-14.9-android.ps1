@@ -3,7 +3,9 @@ param(
     [string] $PuertsRoot = 'D:\UGit\puerts-Unity_v2.2.3',
     [string] $Ndk = 'D:\Android\Sdk\ndk\28.2.13676358',
     [string] $CMakeBin = 'D:\Android\Sdk\cmake\3.31.6\bin',
-    [string] $ArtifactRoot = 'D:\UGit\puerts-Unity_v2.2.3\unity\artifacts\v8-14.9-android-debug'
+    [ValidateSet('Debug', 'Release')]
+    [string] $BuildKind = 'Debug',
+    [string] $ArtifactRoot = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,11 +44,16 @@ $verifyBackend = Join-Path $PSScriptRoot 'verify-v8-14.9-android-backend.mjs'
 $nodeModules = Join-Path $PuertsRoot 'unity\node_modules'
 $unityRoot = Join-Path $PuertsRoot 'unity'
 $packageLock = Join-Path $unityRoot 'package-lock.json'
+$inspectorBuild = $BuildKind -eq 'Debug'
+$artifactName = if ($inspectorBuild) { 'v8-14.9-android-debug' } else { 'v8-14.9-android-release' }
+if ([string]::IsNullOrWhiteSpace($ArtifactRoot)) {
+    $ArtifactRoot = Join-Path $unityRoot "artifacts\$artifactName"
+}
 $expectedArtifactParent = [IO.Path]::GetFullPath((Join-Path $unityRoot 'artifacts'))
 $resolvedArtifactRoot = [IO.Path]::GetFullPath($ArtifactRoot)
 if ([IO.Path]::GetDirectoryName($resolvedArtifactRoot) -ne $expectedArtifactParent -or
-    [IO.Path]::GetFileName($resolvedArtifactRoot) -ne 'v8-14.9-android-debug') {
-    throw "ArtifactRoot 必须精确为 $expectedArtifactParent\v8-14.9-android-debug"
+    [IO.Path]::GetFileName($resolvedArtifactRoot) -ne $artifactName) {
+    throw "ArtifactRoot 必须精确为 $expectedArtifactParent\$artifactName"
 }
 $stagingRoot = "$resolvedArtifactRoot.staging"
 $backupRoot = "$resolvedArtifactRoot.previous"
@@ -75,7 +82,8 @@ if ($LASTEXITCODE -ne 0) { throw 'PuerTS 有未提交的 tracked 修改，拒绝
 $untracked = @(& git -C $PuertsRoot ls-files --others --exclude-standard)
 if ($LASTEXITCODE -ne 0) { throw '无法读取 PuerTS 未跟踪文件' }
 $unexpectedUntracked = @($untracked | Where-Object {
-    $_ -notmatch '^unity/build-v8-14\.9-pc-debug\.(?:stderr|stdout)\.log$'
+    $_ -notmatch '^unity/build-v8-14\.9-pc-debug\.(?:stderr|stdout)\.log$' -and
+    $_ -notmatch '^unity/artifacts/v8-14\.9-android-(?:debug|release)(?:/|$)'
 })
 if ($unexpectedUntracked.Count -gt 0) {
     throw "PuerTS 存在可能影响构建的未跟踪文件：$($unexpectedUntracked -join ', ')"
@@ -152,10 +160,12 @@ try {
             '--arch', $archName,
             '--backend', $backendAlias,
             '--config', 'Release',
-            '--with_inspector',
-            '--websocket', '1',
+            '--websocket', $(if ($inspectorBuild) { '1' } else { '0' }),
             '--rebuild'
         )
+        if ($inspectorBuild) {
+            $arguments += '--with_inspector'
+        }
         & node @arguments
         if ($LASTEXITCODE -ne 0) { throw "$abi 编译失败" }
 
@@ -183,11 +193,17 @@ try {
         if ($buildGraph -notmatch '(?m)(?:^|\s)-static-libstdc\+\+(?:\s|$)') {
             throw "$abi 工具链规则未启用静态 C++ 运行库"
         }
-        foreach ($definition in @('WITH_INSPECTOR', 'WITH_WEBSOCKET', 'V8_TARGET_OS_ANDROID')) {
+        foreach ($definition in @('V8_TARGET_OS_ANDROID')) {
             $definitionToken = [regex]::Escape("-D$definition")
             if ($buildGraph -notmatch "(?m)(?:^|\s)$definitionToken(?:\s|$)") {
                 throw "$abi 未带编译定义 $definition"
             }
+        }
+        foreach ($definition in @('WITH_INSPECTOR', 'WITH_WEBSOCKET')) {
+            $definitionToken = [regex]::Escape("-D$definition")
+            $present = $buildGraph -match "(?m)(?:^|\s)$definitionToken(?:\s|$)"
+            if ($inspectorBuild -and !$present) { throw "$abi Debug 缺少编译定义 $definition" }
+            if (!$inspectorBuild -and $present) { throw "$abi Release 意外包含编译定义 $definition" }
         }
         $compressionDefinitions = @('V8_COMPRESS_POINTERS', 'V8_COMPRESS_POINTERS_IN_SHARED_CAGE', 'V8_31BIT_SMIS_ON_64BIT_ARCH')
         foreach ($definition in $compressionDefinitions) {
@@ -211,8 +227,20 @@ try {
         }
         $inspectorText = (& $strings $builtSo) -join "`n"
         if ($LASTEXITCODE -ne 0) { throw "$abi 字符串表读取失败" }
-        if ($inspectorText -notmatch 'Runtime\.enable' -or $inspectorText -notmatch 'Debugger\.enable') {
-            throw "$abi 缺少 V8 Inspector 特征串"
+        $inspectorEndpointMarkers = @('Sec-WebSocket-Key', 'webSocketDebuggerUrl', '/json/list')
+        if ($inspectorBuild) {
+            foreach ($marker in @('Runtime.enable', 'Debugger.enable') + $inspectorEndpointMarkers) {
+                if ($inspectorText -notmatch [regex]::Escape($marker)) {
+                    throw "$abi Debug 缺少 Inspector 特征串 $marker"
+                }
+            }
+        }
+        else {
+            foreach ($marker in $inspectorEndpointMarkers) {
+                if ($inspectorText -match [regex]::Escape($marker)) {
+                    throw "$abi Release 意外包含 Inspector 端点特征串 $marker"
+                }
+            }
         }
 
         $destinationDirectory = Join-Path $stagingRoot $abi
@@ -225,15 +253,15 @@ try {
             schemaVersion = 1
             v8Version = '14.9.207.39'
             abi = $abi
-            buildType = 'ReleaseOptimizedWithInspector'
+            buildType = if ($inspectorBuild) { 'ReleaseOptimizedWithInspector' } else { 'Release' }
             ndkRevision = '28.2.13676358'
             minSdk = 23
             maglev = $true
             pointerCompression = ($archName -ne 'armv7')
             partitionAlloc = $false
             allocatorShim = $false
-            inspector = $true
-            webSocket = $true
+            inspector = $inspectorBuild
+            webSocket = $inspectorBuild
             backendManifestSha256 = (Get-FileHash -LiteralPath $backendManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
             backendLibrarySha256 = $backendManifest.files.library.sha256
             backendHeadersSha256 = $backendManifest.files.headers.sha256
@@ -289,4 +317,4 @@ if (Test-Path -LiteralPath $backupRoot) {
     Remove-Item -LiteralPath $backupRoot -Recurse -Force
 }
 
-Write-Host "方案 B 三 ABI（含 armeabi-v7a）构建与静态校验完成，产物仅位于：$resolvedArtifactRoot" -ForegroundColor Green
+Write-Host "方案 B 三 ABI（含 armeabi-v7a）$BuildKind 构建与静态校验完成，产物仅位于：$resolvedArtifactRoot" -ForegroundColor Green
