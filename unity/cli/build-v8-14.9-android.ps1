@@ -40,6 +40,7 @@ $ninja = Join-Path $CMakeBin 'ninja.exe'
 $sourceProperties = Join-Path $Ndk 'source.properties'
 $readElf = Join-Path $Ndk 'toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-readelf.exe'
 $strings = Join-Path $Ndk 'toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-strings.exe'
+$nm = Join-Path $Ndk 'toolchains\llvm\prebuilt\windows-x86_64\bin\llvm-nm.exe'
 $verifyBackend = Join-Path $PSScriptRoot 'verify-v8-14.9-android-backend.mjs'
 $nodeModules = Join-Path $PuertsRoot 'unity\node_modules'
 $unityRoot = Join-Path $PuertsRoot 'unity'
@@ -68,6 +69,7 @@ $requiredPaths = @(
     [pscustomobject]@{ Path = $sourceProperties; Description = 'NDK source.properties' },
     [pscustomobject]@{ Path = $readElf; Description = 'llvm-readelf' },
     [pscustomobject]@{ Path = $strings; Description = 'llvm-strings' },
+    [pscustomobject]@{ Path = $nm; Description = 'llvm-nm' },
     [pscustomobject]@{ Path = $verifyBackend; Description = 'backend 校验脚本' },
     [pscustomobject]@{ Path = $packageLock; Description = 'Unity CLI package-lock.json' }
 )
@@ -193,6 +195,9 @@ try {
         if ($buildGraph -notmatch '(?m)(?:^|\s)-static-libstdc\+\+(?:\s|$)') {
             throw "$abi 工具链规则未启用静态 C++ 运行库"
         }
+        if ($buildGraph -notmatch '(?m)(?:^|\s)-Wl,--exclude-libs,libwee8\.a(?:\s|$)') {
+            throw "$abi 未隐藏 V8 后端静态库符号（缺 -Wl,--exclude-libs,libwee8.a）"
+        }
         foreach ($definition in @('V8_TARGET_OS_ANDROID')) {
             $definitionToken = [regex]::Escape("-D$definition")
             if ($buildGraph -notmatch "(?m)(?:^|\s)$definitionToken(?:\s|$)") {
@@ -224,6 +229,26 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "$abi ELF 动态段读取失败" }
         if ($dynamic -match 'libc\+\+_shared\.so') {
             throw "$abi 意外依赖 libc++_shared.so；固定方案要求 c++_static"
+        }
+        $nmOutput = & $nm -D --defined-only $builtSo
+        if ($LASTEXITCODE -ne 0) { throw "$abi 动态符号表读取失败" }
+        $exportedSymbols = @($nmOutput | ForEach-Object { ($_ -split '\s+', 3)[2] } | Where-Object { $_ })
+        if ($exportedSymbols.Count -eq 0) { throw "$abi 动态符号表为空" }
+        $leakedBackendSymbols = @($exportedSymbols | Where-Object { $_ -like '_ZN2v8*' -or $_ -like '_ZNK2v8*' })
+        if ($leakedBackendSymbols.Count -gt 0) {
+            throw "$abi 导出了 $($leakedBackendSymbols.Count) 个 V8 内部符号，后端符号隐藏未生效"
+        }
+        if ($exportedSymbols.Count -gt 8000) {
+            throw "$abi 导出符号数 $($exportedSymbols.Count) 超出上限 8000，疑似后端符号隐藏失效"
+        }
+        $pesapiExports = @($exportedSymbols | Where-Object { $_ -like 'pesapi_*' })
+        if ($pesapiExports.Count -lt 90) {
+            throw "$abi pesapi 导出入口仅 $($pesapiExports.Count) 个，低于预期，符号隐藏范围过宽"
+        }
+        foreach ($requiredExport in @('__cxa_throw', '__gxx_personality_v0', '__dynamic_cast', '__emutls_get_address')) {
+            if ($exportedSymbols -notcontains $requiredExport) {
+                throw "$abi 缺少必须保留的 C++ ABI 导出符号 $requiredExport"
+            }
         }
         $inspectorText = (& $strings $builtSo) -join "`n"
         if ($LASTEXITCODE -ne 0) { throw "$abi 字符串表读取失败" }
@@ -262,6 +287,9 @@ try {
             allocatorShim = $false
             inspector = $inspectorBuild
             webSocket = $inspectorBuild
+            backendSymbolsHidden = $true
+            exportedDynamicSymbols = $exportedSymbols.Count
+            pesapiExports = $pesapiExports.Count
             backendManifestSha256 = (Get-FileHash -LiteralPath $backendManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
             backendLibrarySha256 = $backendManifest.files.library.sha256
             backendHeadersSha256 = $backendManifest.files.headers.sha256

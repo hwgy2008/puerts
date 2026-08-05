@@ -674,6 +674,11 @@ elseif ( ANDROID )
         target_link_options(puerts PRIVATE -s)
     endif()
 	target_link_options(puerts PRIVATE -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384) # android 16K Pagesize
+    # V8 后端静态库的内部符号（arm64 实测约 5 万个）无需对外导出。不隐藏的代价：
+    # .dynstr / .dynsym / .plt 等动态链接元数据多占约 13MB；更关键的是这些符号会成为
+    # --gc-sections 的存活根，令工具链已启用的段回收完全失效。
+    # 只排除后端库自身，libc++abi / clang_rt 提供的 __cxa_* 等符号保持导出不变。
+    target_link_options(puerts PRIVATE -Wl,--exclude-libs,libwee8.a)
 elseif ( APPLE )
 
     if ( IOS )
